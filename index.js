@@ -5,6 +5,8 @@ const app = express();
 
 const dbConnect = require('./src/db');
 
+const PORT = process.env.PORT || 8080;
+
 // CORS middleware
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -37,8 +39,8 @@ dbConnect().then(() => {
 
 
 
-app.listen(8080, () => {
-    console.log("Server is running on port 8080");
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
 
 
