@@ -122,6 +122,7 @@ function adjustToDaytime(nextTime) {
 function scheduleNextPost() {
     const delay = getRandomDelay();
     // const delay = 1 * 60 * 1000; 
+    console.log("Delay:", new Date(delay).toLocaleString());
     let nextTime = new Date(Date.now() + delay);
     nextTime = adjustToDaytime(nextTime);
 
