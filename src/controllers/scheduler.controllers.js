@@ -3,8 +3,8 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 const InstagramPost = require('../models/posts.models');
 
-const START_HOUR = 9;   // 9 AM
-const END_HOUR = 23;    // 11 PM
+const START_HOUR = 8 - 5;
+const END_HOUR = 23 - 5;    
 
 let isSchedulerRunning = false;
 let currentJob = null;
