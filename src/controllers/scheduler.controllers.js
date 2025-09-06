@@ -1,29 +1,49 @@
 const schedule = require("node-schedule");
 const axios = require("axios");
 const dotenv = require("dotenv");
+const mongoose = require('mongoose');
 const InstagramPost = require('../models/posts.models');
 
 const START_HOUR = 8 - 5;
 const END_HOUR = 23 - 5;    
 
-let isSchedulerRunning = false;
-let currentJob = null;
+let isSchedulerRunning = {};
+let currentJob = {};
+let startedAt = {};
 
 
 dotenv.config();
 
-const PAGE_ID = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID;        // Instagram Business/Creator account ID
-const ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN;
+function getAccountConfig(account) {
+    const normalized = (account || '').toLowerCase();
+    if (normalized === 'codingwithbugs') {
+        return {
+            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
+            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN,
+        };
+    }
+    // default to dreamchasers
+    return {
+        PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_DREAMCHASERS,
+        ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_DREAMCAHSERS
+    };
+}
 
-console.log("PAGE_ID", PAGE_ID);
-console.log("ACCESS_TOKEN", ACCESS_TOKEN);
+function getPostModelForAccount(account) {
+    const normalized = (account || 'dreamchasers').toLowerCase();
+    const collectionName = normalized === "dreamchasers" ? `InstagramPost_${normalized}` : `InstagramPost`;
+    const modelName = normalized === "dreamchasers" ? `InstagramPostModel_${normalized}` : `InstagramPostModel`;
+    return mongoose.models[modelName] || mongoose.model(modelName, InstagramPost.schema, collectionName);
+}
 
-async function postReel() {
+async function postReel(account) {
     try {
         console.log("Posting Reel at", new Date().toLocaleString());
+        const { PAGE_ID, ACCESS_TOKEN } = getAccountConfig(account);
+        const PostModel = getPostModelForAccount(account);
 
         // 1. Get unposted content from DB
-        const unpostedPost = await InstagramPost.findOne({ isPosted: false });
+        const unpostedPost = await PostModel.findOne({ isPosted: false });
         if (!unpostedPost) {
             console.log("No unposted content available");
             return;
@@ -87,7 +107,7 @@ async function postReel() {
         console.log("Published reel:", publishRes.data);
 
         // 5. Update DB
-        await InstagramPost.findByIdAndUpdate(unpostedPost._id, { isPosted: true });
+        await PostModel.findByIdAndUpdate(unpostedPost._id, { isPosted: true });
         console.log(`Marked post ${unpostedPost._id} as posted.`);
 
     } catch (error) {
@@ -119,7 +139,7 @@ function adjustToDaytime(nextTime) {
 }
 
 // Recursive scheduler
-function scheduleNextPost() {
+function scheduleNextPost(account) {
     const delay = getRandomDelay();
     // const delay = 1 * 60 * 1000; 
     console.log("Delay:", new Date(delay).toLocaleString());
@@ -128,67 +148,72 @@ function scheduleNextPost() {
 
     console.log("Next post scheduled at", nextTime.toLocaleString());
 
-    currentJob = schedule.scheduleJob(nextTime, async () => {
-        await postReel();
-        if (isSchedulerRunning) {
-            scheduleNextPost(); // chain the next one
+    currentJob[account] = schedule.scheduleJob(nextTime, async () => {
+        await postReel(account);
+        if (isSchedulerRunning[account]) {
+            scheduleNextPost(account); // chain the next one
         }
     });
 }
 
 
-function startScheduler() {
-    if (isSchedulerRunning) {
-        return { message: "Scheduler is already running" };
+function startScheduler(account) {
+    if (isSchedulerRunning[account]) {
+        return { message: "Scheduler is already running", status: 'running' };
     }
 
-    isSchedulerRunning = true;
+    isSchedulerRunning[account] = true;
+    startedAt[account] = new Date();
 
-    // Start cycle at 12PM daily
-    schedule.scheduleJob("0 12 * * *", () => {
-        console.log("Starting daily posting cycle...");
-        if (isSchedulerRunning) {
-            scheduleNextPost();
+    // Start cycle at 12PM daily for this account
+    schedule.scheduleJob(`0 12 * * *`, () => {
+        console.log(`[${account}] Starting daily posting cycle...`);
+        if (isSchedulerRunning[account]) {
+            scheduleNextPost(account);
         }
     });
 
     // Also start immediately for testing
-    scheduleNextPost();
+    scheduleNextPost(account);
 
-    console.log("Scheduler started successfully");
-    return { message: "Scheduler started successfully" };
+    console.log(`[${account}] Scheduler started successfully`);
+    return { message: "Scheduler started successfully", status: 'running' };
 }
 
 // Stop the scheduler
-function stopScheduler() {
-    isSchedulerRunning = false;
+function stopScheduler(account) {
+    isSchedulerRunning[account] = false;
 
     // Cancel current job
-    if (currentJob) {
-        currentJob.cancel();
-        currentJob = null;
+    if (currentJob[account]) {
+        currentJob[account].cancel();
+        currentJob[account] = null;
     }
 
-    // Cancel all scheduled jobs
-    schedule.gracefulShutdown();
-
-    console.log("Scheduler stopped");
-    return { message: "Scheduler stopped successfully" };
+    console.log(`[${account}] Scheduler stopped`);
+    return { message: "Scheduler stopped successfully", status: 'stopped' };
 }
 
 // Get scheduler status
-function getSchedulerStatus() {
+function getSchedulerStatus(account) {
+    const running = !!isSchedulerRunning[account];
+    const job = currentJob[account];
+    const next = job ? job.nextInvocation() : null;
+    const start = startedAt[account] || null;
+    const uptime = start ? Math.round((Date.now() - start.getTime()) / 60000) : null;
     return {
-        isRunning: isSchedulerRunning,
-        nextScheduledTime: currentJob ? currentJob.nextInvocation() : null,
-        totalScheduledJobs: Object.keys(schedule.scheduledJobs).length
+        status: running ? 'running' : 'stopped',
+        startedAt: start,
+        nextRun: next,
+        uptime
     };
 }
 
 // Controller functions for API endpoints
 const startSchedulerController = async (req, res) => {
     try {
-        const result = startScheduler();
+        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        const result = startScheduler(account);
         res.status(200).json(result);
     } catch (error) {
         console.error("Error starting scheduler:", error);
@@ -198,7 +223,8 @@ const startSchedulerController = async (req, res) => {
 
 const stopSchedulerController = async (req, res) => {
     try {
-        const result = stopScheduler();
+        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        const result = stopScheduler(account);
         res.status(200).json(result);
     } catch (error) {
         console.error("Error stopping scheduler:", error);
@@ -208,7 +234,8 @@ const stopSchedulerController = async (req, res) => {
 
 const getSchedulerStatusController = async (req, res) => {
     try {
-        const status = getSchedulerStatus();
+        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        const status = getSchedulerStatus(account);
         res.status(200).json(status);
     } catch (error) {
         console.error("Error getting scheduler status:", error);
@@ -219,7 +246,8 @@ const getSchedulerStatusController = async (req, res) => {
 // Manual post trigger (for testing)
 const manualPostController = async (req, res) => {
     try {
-        await postReel();
+        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        await postReel(account);
         res.status(200).json({ message: "Post triggered manually" });
     } catch (error) {
         console.error("Error in manual post:", error);
