@@ -53,6 +53,12 @@ async function postReel(account) {
         const hashtagsString = hashtags && hashtags.length > 0 ? " " + hashtags.join(" ") : "";
 
         let containerId = null;
+        console.log("PAGE_ID:", PAGE_ID);
+        console.log("ACCESS_TOKEN:", ACCESS_TOKEN);
+        console.log("videoUrl:", videoUrl);
+        console.log("caption:", caption);
+        console.log("hashtags:", hashtags);
+        console.log("hashtagsString:", hashtagsString);
 
         try {
             const createRes = await axios.post(
