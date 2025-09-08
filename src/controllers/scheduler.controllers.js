@@ -18,8 +18,14 @@ function getAccountConfig(account) {
     const normalized = (account || '').toLowerCase();
     if (normalized === 'codingwithbugs') {
         return {
-            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
-            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN,
+            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_CODINGWITHBUGS,
+            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_CODINGWITHBUGS,
+        };
+    }
+    if (normalized === 'vallendros') {
+        return {
+            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_VELLANDROS,
+            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_VELLANDROS,
         };
     }
     // default to dreamchasers
@@ -31,8 +37,8 @@ function getAccountConfig(account) {
 
 function getPostModelForAccount(account) {
     const normalized = (account || 'dreamchasers').toLowerCase();
-    const collectionName = normalized === "dreamchasers" ? `InstagramPost_${normalized}` : `InstagramPost`;
-    const modelName = normalized === "dreamchasers" ? `InstagramPostModel_${normalized}` : `InstagramPostModel`;
+    const collectionName = normalized !== "codingwithbugs" ? `InstagramPost_${normalized}` : `InstagramPost`;
+    const modelName = normalized !== "codingwithbugs" ? `InstagramPostModel_${normalized}` : `InstagramPostModel`;
     return mongoose.models[modelName] || mongoose.model(modelName, InstagramPost.schema, collectionName);
 }
 
@@ -59,6 +65,7 @@ async function postReel(account) {
         console.log("caption:", caption);
         console.log("hashtags:", hashtags);
         console.log("hashtagsString:", hashtagsString);
+
 
         try {
             const createRes = await axios.post(

@@ -17,9 +17,9 @@ async function uploadVideoFromUrl(videoUrl, account) {
     try {
         const result = await cloudinary.uploader.upload(videoUrl, {
             resource_type: "video", // tell Cloudinary this is a video
-            folder: account === "dreamchasers" ? `videos/${account}` : "videos"
+            folder: account !== "codingwithbugs" ? `videos/${account}` : "videos"
         });
-        console.log("Uploaded video URL:", result.secure_url);
+        // console.log("Uploaded video URL:", result.secure_url);
         return result.secure_url;
     } catch (error) {
         console.error("Error uploading video:", error);
@@ -28,8 +28,8 @@ async function uploadVideoFromUrl(videoUrl, account) {
 
 function getPostModelForAccount(account) {
     const normalized = (account || 'dreamchasers').toLowerCase();
-    const collectionName = normalized === "dreamchasers" ? `InstagramPost_${normalized}` : `InstagramPost`;
-    const modelName = normalized === "dreamchasers" ? `InstagramPostModel_${normalized}` : `InstagramPostModel`;
+    const collectionName = normalized !== "codingwithbugs" ? `InstagramPost_${normalized}` : `InstagramPost`;
+    const modelName = normalized !== "codingwithbugs" ? `InstagramPostModel_${normalized}` : `InstagramPostModel`;
     return mongoose.models[modelName] || mongoose.model(modelName, InstagramPost.schema, collectionName);
 }
 
