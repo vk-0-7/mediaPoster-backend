@@ -28,11 +28,48 @@ function getAccountConfig(account) {
             ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_VELLANDROS,
         };
     }
+    if (normalized === 'dailyaiinsights') {
+        return {
+            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_DAILY_AI_INSIGHTS,
+            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_DAILY_AI_INSIGHTS,
+        };
+    }
     // default to dreamchasers
     return {
         PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_DREAMCHASERS,
         ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_DREAMCAHSERS
     };
+}
+
+
+const getCaptions = (caption, account) => {
+    const normalize = (account || '').toLowerCase();
+    if (normalize === 'codingwithbugs') {
+        return caption + " #codingwithbugs";
+    }
+    else if (normalize === 'vallendros') {
+        let cap = `2025 will be our year ❤️🔥💸
+       Follow and manifest now !!
+       -
+       -
+       -
+       DM for credits or removal 🤝
+       -
+       -
+       -
+       #motivation #inspiration #success #wealth #money #blessed #adrenaline #goal #achievement #vision #dream #
+       `
+        return cap;
+    }
+    else if (normalize === 'dailyaiinsights') {
+        return caption + " #dailyaiinsights #ai #artificialintelligence #tech #innovation";
+    }
+    else if (normalize === 'dreamchasers') {
+        return caption + " #dreamchasers";
+    }
+    else {
+        return caption;
+    }
 }
 
 function getPostModelForAccount(account) {
@@ -75,7 +112,7 @@ async function postReel(account) {
                     params: {
                         media_type: "REELS",
                         video_url: videoUrl,
-                        caption: caption || "" + hashtagsString,
+                        caption: getCaptions(caption),
                         share_to_feed: true,
                         access_token: ACCESS_TOKEN,
                     }
