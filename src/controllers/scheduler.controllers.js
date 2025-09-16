@@ -168,7 +168,7 @@ async function postReel(account) {
 
 // Generate random delay (in ms) between 1–4 hours
 function getRandomDelay() {
-    const hours = Math.floor(Math.random() * 4) + 1; // 1–4 hrs
+    const hours = Math.floor(Math.random() * 4) + 3; // 3–6 hrs
     const minutes = Math.floor(Math.random() * 60);
     return (hours * 60 + minutes) * 60 * 1000; // ms
 }
@@ -178,12 +178,16 @@ function adjustToDaytime(nextTime) {
     const hour = nextTime.getHours();
 
     if (hour < START_HOUR) {
-        // Too early → shift to today 9AM
-        nextTime.setHours(START_HOUR, 0, 0, 0);
+        // Too early → shift to today random time between 9AM-12PM
+        const randomHour = Math.floor(Math.random() * 4) + START_HOUR; // 9-12
+        const randomMinute = Math.floor(Math.random() * 60);
+        nextTime.setHours(randomHour, randomMinute, 0, 0);
     } else if (hour >= END_HOUR) {
-        // Too late → shift to tomorrow 9AM
+        // Too late → shift to tomorrow random time between 9AM-12PM
         nextTime.setDate(nextTime.getDate() + 1);
-        nextTime.setHours(START_HOUR, 0, 0, 0);
+        const randomHour = Math.floor(Math.random() * 4) + START_HOUR; // 9-12
+        const randomMinute = Math.floor(Math.random() * 60);
+        nextTime.setHours(randomHour, randomMinute, 0, 0);
     }
     return nextTime;
 }
