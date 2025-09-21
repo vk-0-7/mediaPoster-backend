@@ -3,9 +3,10 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 const mongoose = require('mongoose');
 const InstagramPost = require('../models/posts.models');
+const { sendEmail } = require("../utils/email");
 
-const START_HOUR = 8 - 5;
-const END_HOUR = 23 - 5;    
+const START_HOUR = 8 - 5.5;
+const END_HOUR = 23 - 5.5;    
 
 let isSchedulerRunning = {};
 let currentJob = {};
@@ -81,7 +82,7 @@ function getPostModelForAccount(account) {
 
 async function postReel(account) {
     try {
-        console.log("Posting Reel at", new Date().toLocaleString());
+        // console.log("Posting Reel at", new Date().toLocaleString());
         const { PAGE_ID, ACCESS_TOKEN } = getAccountConfig(account);
         const PostModel = getPostModelForAccount(account);
 
@@ -96,12 +97,12 @@ async function postReel(account) {
         const hashtagsString = hashtags && hashtags.length > 0 ? " " + hashtags.join(" ") : "";
 
         let containerId = null;
-        console.log("PAGE_ID:", PAGE_ID);
-        console.log("ACCESS_TOKEN:", ACCESS_TOKEN);
-        console.log("videoUrl:", videoUrl);
-        console.log("caption:", caption);
-        console.log("hashtags:", hashtags);
-        console.log("hashtagsString:", hashtagsString);
+        // console.log("PAGE_ID:", PAGE_ID);
+        // console.log("ACCESS_TOKEN:", ACCESS_TOKEN);
+        // console.log("videoUrl:", videoUrl);
+        // console.log("caption:", caption);
+        // console.log("hashtags:", hashtags);
+        // console.log("hashtagsString:", hashtagsString);
 
 
         try {
@@ -120,7 +121,7 @@ async function postReel(account) {
             );
 
             containerId = createRes.data.id;
-            console.log("Created video container:", containerId);
+            // console.log("Created video container:", containerId);
         } catch (error) {
             console.error("Error creating video container:", error);
             return;
@@ -162,6 +163,7 @@ async function postReel(account) {
 
     } catch (error) {
         console.error("Error posting reel:", error.response?.data || error.message);
+        sendEmail('something went Wrong', `There is an error while posting from  account ${account}`)
     }
 }
 
@@ -194,13 +196,21 @@ function adjustToDaytime(nextTime) {
 
 // Recursive scheduler
 function scheduleNextPost(account) {
+    // Cancel existing job if any to prevent duplicates
+    if (currentJob[account]) {
+        currentJob[account].cancel();
+        currentJob[account] = null;
+    }
+
     const delay = getRandomDelay();
-    // const delay = 1 * 60 * 1000; 
-    console.log("Delay:", new Date(delay).toLocaleString());
+    const delayHours = Math.floor(delay / (1000 * 60 * 60));
+    const delayMinutes = Math.floor((delay % (1000 * 60 * 60)) / (1000 * 60));
+    console.log(`[${account}] Delay: ${delayHours}h ${delayMinutes}m`);
+
     let nextTime = new Date(Date.now() + delay);
     nextTime = adjustToDaytime(nextTime);
 
-    console.log("Next post scheduled at", nextTime.toLocaleString());
+    console.log(`[${account}] Next post scheduled at`, nextTime.toLocaleString());
 
     currentJob[account] = schedule.scheduleJob(nextTime, async () => {
         await postReel(account);
@@ -216,18 +226,16 @@ function startScheduler(account) {
         return { message: "Scheduler is already running", status: 'running' };
     }
 
+    // Clean up any existing jobs before starting
+    if (currentJob[account]) {
+        currentJob[account].cancel();
+        currentJob[account] = null;
+    }
+
     isSchedulerRunning[account] = true;
     startedAt[account] = new Date();
 
-    // Start cycle at 12PM daily for this account
-    schedule.scheduleJob(`0 12 * * *`, () => {
-        console.log(`[${account}] Starting daily posting cycle...`);
-        if (isSchedulerRunning[account]) {
-            scheduleNextPost(account);
-        }
-    });
-
-    // Also start immediately for testing
+    // Start immediately with proper scheduling chain
     scheduleNextPost(account);
 
     console.log(`[${account}] Scheduler started successfully`);
@@ -243,6 +251,9 @@ function stopScheduler(account) {
         currentJob[account].cancel();
         currentJob[account] = null;
     }
+
+    // Clear started time
+    delete startedAt[account];
 
     console.log(`[${account}] Scheduler stopped`);
     return { message: "Scheduler stopped successfully", status: 'stopped' };
