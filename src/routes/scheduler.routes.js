@@ -4,7 +4,7 @@ const {
     stopSchedulerController,
     getSchedulerStatusController,
     manualPostController
-} = require('../controllers/scheduler.controllers');
+} = require('../controllers/instascheduler.controllers');
 
 const router = express.Router();
 

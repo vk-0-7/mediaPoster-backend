@@ -25,7 +25,13 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use('/api/posts', require('./src/routes/posts.routes'));
 app.use('/api/upload', require('./src/routes/upload.routes'));
-app.use('/api/scheduler', require('./src/routes/scheduler.routes'));
+app.use('/api/scheduler', require('./src/routes/scheduler.routes')); // Legacy route - deprecated
+app.use('/api/twitter', require('./src/routes/twitter.routes'));
+
+// Platform-specific routes
+app.use('/api/instagram', require('./src/routes/instagram.routes'));
+app.use('/api/bluesky', require('./src/routes/bluesky.routes'));
+app.use('/api/threads', require('./src/routes/threads.routes'));
 
 app.get('/', (req, res) => {
     res.send('Welcome to the Media Poster API');

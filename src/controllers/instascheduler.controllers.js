@@ -4,74 +4,16 @@ const dotenv = require("dotenv");
 const mongoose = require('mongoose');
 const InstagramPost = require('../models/posts.models');
 const { sendEmail } = require("../utils/email");
+const { getPlatformConfig, getCustomCaption } = require("../utils/platformConfig");
 
 const START_HOUR = 8 - 5.5;
-const END_HOUR = 23 - 5.5;    
+const END_HOUR = 23 - 5.5;
 
 let isSchedulerRunning = {};
 let currentJob = {};
 let startedAt = {};
 
-
 dotenv.config();
-
-function getAccountConfig(account) {
-    const normalized = (account || '').toLowerCase();
-    if (normalized === 'codingwithbugs') {
-        return {
-            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_CODINGWITHBUGS,
-            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_CODINGWITHBUGS,
-        };
-    }
-    if (normalized === 'vallendros') {
-        return {
-            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_VELLANDROS,
-            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_VELLANDROS,
-        };
-    }
-    if (normalized === 'dailyaiinsights') {
-        return {
-            PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_DAILY_AI_INSIGHTS,
-            ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_DAILY_AI_INSIGHTS,
-        };
-    }
-    // default to dreamchasers
-    return {
-        PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_DREAMCHASERS,
-        ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_DREAMCAHSERS
-    };
-}
-
-
-const getCaptions = (caption, account) => {
-    const normalize = (account || '').toLowerCase();
-    if (normalize === 'codingwithbugs') {
-        return caption + " #codingwithbugs";
-    }
-    else if (normalize === 'vallendros') {
-        let cap = `2025 will be our year ❤️🔥💸
-       Follow and manifest now !!
-       -
-       -
-       -
-       DM for credits or removal 🤝
-       -
-       -
-       -
-       #motivation #inspiration #success #wealth #money #blessed #adrenaline #goal #achievement #vision #dream #
-       `
-        return cap;
-    }
-    else if (normalize === 'dailyaiinsights') {
-        return caption + " #dailyaiinsights #ai #artificialintelligence #tech #innovation";
-    }
-    else if (normalize === 'dreamchasers') {
-        return caption + " #dreamchasers";
-    }
-    else {
-        return caption;
-    }
-}
 
 function getPostModelForAccount(account) {
     const normalized = (account || 'dreamchasers').toLowerCase();
@@ -80,10 +22,10 @@ function getPostModelForAccount(account) {
     return mongoose.models[modelName] || mongoose.model(modelName, InstagramPost.schema, collectionName);
 }
 
-async function postReel(account) {
+async function postReel(account, platform = 'instagram') {
     try {
         // console.log("Posting Reel at", new Date().toLocaleString());
-        const { PAGE_ID, ACCESS_TOKEN } = getAccountConfig(account);
+        const { PAGE_ID, ACCESS_TOKEN } = getPlatformConfig(platform, account);
         const PostModel = getPostModelForAccount(account);
 
         // 1. Get unposted content from DB
@@ -113,7 +55,7 @@ async function postReel(account) {
                     params: {
                         media_type: "REELS",
                         video_url: videoUrl,
-                        caption: getCaptions(caption),
+                        caption: getCustomCaption(platform, account, caption),
                         share_to_feed: true,
                         access_token: ACCESS_TOKEN,
                     }
