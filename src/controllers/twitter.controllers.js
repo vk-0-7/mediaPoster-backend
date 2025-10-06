@@ -1,46 +1,54 @@
 const { TwitterApi } = require('twitter-api-v2');
-const TwitterPost = require('../models/twitter.models');
+const { getTwitterModelForAccount } = require('../models/twitter.models');
+const { getTwitterConfig } = require('../utils/platformConfig');
 const schedule = require('node-schedule');
 const axios = require('axios');
 
-// Initialize Twitter clients
-let readClient = null;
-let writeClient = null;
+// Store Twitter clients per account
+const readClients = {};
+const writeClients = {};
 
-function initializeTwitterClient() {
+function initializeTwitterClient(account = 'maria') {
     try {
+        const credentials = getTwitterConfig(account);
+
         // Read-only client (for fetching tweets)
-        readClient = new TwitterApi(process.env.X_BEARER_TOKEN_FOR_MARIA);
+        readClients[account] = new TwitterApi(credentials.BEARER_TOKEN);
 
         // Write client (for posting tweets)
-        writeClient = new TwitterApi({
-            appKey: process.env.X_API_KEY_FOR_MARIA,
-            appSecret: process.env.X_API_KEY_SECRET_FOR_MARIA,
-            accessToken: process.env.X_ACCESS_TOKEN_FOR_MARIA,
-            accessSecret: process.env.X_ACCESS_SECRET_FOR_MARIA,
+        writeClients[account] = new TwitterApi({
+            appKey: credentials.API_KEY,
+            appSecret: credentials.API_SECRET,
+            accessToken: credentials.ACCESS_TOKEN,
+            accessSecret: credentials.ACCESS_SECRET,
         });
 
-        console.log('Twitter clients initialized');
+        console.log(`Twitter clients initialized for account: ${account}`);
     } catch (error) {
-        console.error('Error initializing Twitter client:', error.message);
+        console.error(`Error initializing Twitter client for ${account}:`, error.message);
     }
 }
 
-// Initialize on module load
-initializeTwitterClient();
+// Initialize both accounts on module load
+initializeTwitterClient('maria');
+initializeTwitterClient('divya');
 
 // Fetch tweets from a specific user
 const fetchUserTweets = async (req, res) => {
     try {
-        const { username, count = 20 } = req.query;
+        const { username, count = 20, account = 'maria' } = req.query;
 
         if (!username) {
             return res.status(400).json({ error: 'Username is required' });
         }
 
+        const readClient = readClients[account];
         if (!readClient) {
-            return res.status(500).json({ error: 'Twitter client not initialized' });
+            return res.status(500).json({ error: `Twitter client not initialized for account: ${account}` });
         }
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
 
         // Get user by username
         const user = await readClient.v2.userByUsername(username);
@@ -85,6 +93,7 @@ const fetchUserTweets = async (req, res) => {
 
         res.status(200).json({
             message: 'Tweets fetched successfully',
+            account,
             count: tweetData.length,
             tweets: tweetData
         });
@@ -101,11 +110,14 @@ const fetchUserTweets = async (req, res) => {
 // Analyze tweets with AI (using Anthropic Claude API)
 const analyzeTweetsWithAI = async (req, res) => {
     try {
-        const { apiKey } = req.body; // User provides their Claude API key
+        const { apiKey, account = 'maria' } = req.body;
 
         if (!apiKey) {
             return res.status(400).json({ error: 'Claude API key is required in request body' });
         }
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
 
         // Get all unanalyzed tweets
         const tweets = await TwitterPost.find({
@@ -184,6 +196,7 @@ Rate the tweet's quality for reposting based on engagement potential, relevance,
 
         res.status(200).json({
             message: 'Tweets analyzed successfully',
+            account,
             analyzed: analyzedTweets.length,
             tweets: analyzedTweets
         });
@@ -200,7 +213,10 @@ Rate the tweet's quality for reposting based on engagement potential, relevance,
 // Get all tweets with optional filters
 const getTweets = async (req, res) => {
     try {
-        const { analyzed, selected, posted, sortBy = '-aiAnalysis.score' } = req.query;
+        const { analyzed, selected, posted, sortBy = '-aiAnalysis.score', account = 'maria' } = req.query;
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
 
         const filter = {};
 
@@ -221,6 +237,7 @@ const getTweets = async (req, res) => {
         const tweets = await TwitterPost.find(filter).sort(sortBy);
 
         res.status(200).json({
+            account,
             count: tweets.length,
             tweets
         });
@@ -235,49 +252,68 @@ const getTweets = async (req, res) => {
 };
 
 // Smart scheduling algorithm based on time of day
-function getSmartScheduleTime() {
-    const now = new Date();
-    let scheduledTime = new Date(now);
+// Calculates next schedule time from a given base time
+function getSmartScheduleTimeFrom(baseTime) {
+    const base = new Date(baseTime);
 
-    const currentHour = now.getHours();
+    // Get UTC hour and minutes
+    const utcHour = base.getHours();
+    const utcMinutes = base.getMinutes();
 
-    // Heavy posting period: 2pm (14:00) - 10pm (22:00) - Post every 1 hour
-    // Light posting period: 10pm (22:00) - 2pm (14:00) - Post every 3-4 hours
+    // Convert to IST (UTC + 5.5 hours)
+    const istHourDecimal = utcHour + utcMinutes/60 + 5.5;
+    const istHour = Math.floor(istHourDecimal % 24);
 
-    const isHeavyPeriod = currentHour >= 14 && currentHour < 22;
+    // Heavy posting period: 1pm (13:00) - 8pm (20:00) IST - Post every 2-3 hours
+    // Light posting period: 8pm (20:00) - 1pm (13:00) IST - Post every 4-5 hours
+
+    const isHeavyPeriod = istHour >= 13 && istHour < 20;
+
+    let hours, minutes;
 
     if (isHeavyPeriod) {
-        // Heavy posting: 1 hour interval with random minutes
-        const hours = 1;
-        const minutes = Math.floor(Math.random() * 60); // 0-59 minutes
-        const delayMs = (hours * 60 + minutes) * 60 * 1000;
-        scheduledTime = new Date(now.getTime() + delayMs);
+        // Heavy posting: 2-3 hours interval with random minutes
+        hours = Math.floor(Math.random() * 2) + 2; // 2-3 hours
+        minutes = Math.floor(Math.random() * 60); // 0-59 minutes
     } else {
-        // Light posting: 3-4 hours interval
-        const hours = Math.floor(Math.random() * 2) + 3; // 3-4 hours
-        const minutes = Math.floor(Math.random() * 60); // 0-59 minutes
-        let delayMs = (hours * 60 + minutes) * 60 * 1000;
-        scheduledTime = new Date(now.getTime() + delayMs);
-
-        // If scheduled time falls in heavy period, push it to next light period
-        const scheduledHour = scheduledTime.getHours();
-        if (scheduledHour >= 14 && scheduledHour < 22) {
-            // Push to 10pm (start of light period)
-            scheduledTime.setHours(22, Math.floor(Math.random() * 60), 0, 0);
-        }
+        // Light posting: 4-5 hours interval
+        hours = Math.floor(Math.random() * 2) + 4; // 4-5 hours
+        minutes = Math.floor(Math.random() * 60); // 0-59 minutes
     }
 
+    // Calculate delay and scheduled time
+    const delayMs = (hours * 60 + minutes) * 60 * 1000;
+    const scheduledTime = new Date(base.getTime() + delayMs);
+
+    // Debug logging
+    console.log(`[SCHEDULER] Base: ${base.toLocaleString()}, UTC Hour: ${utcHour}, IST Hour: ${istHour}, Heavy: ${isHeavyPeriod}, Interval: ${hours}h ${minutes}m, Scheduled: ${scheduledTime.toLocaleString()}, Gap: ${(delayMs / (1000 * 60 * 60)).toFixed(2)}hrs`);
+
     return scheduledTime;
+}
+
+// Legacy function for backward compatibility
+function getSmartScheduleTime() {
+    const now = new Date();
+    const utcHour = now.getHours();
+    const utcMinutes = now.getMinutes();
+    const istHourDecimal = utcHour + utcMinutes/60 + 5.5;
+    const istHour = Math.floor(istHourDecimal % 24);
+
+    console.log(`[SCHEDULER] Server UTC time: ${now.toLocaleString()}, UTC Hour: ${utcHour}, IST Hour: ${istHour}`);
+    return getSmartScheduleTimeFrom(now);
 }
 
 // Accept a tweet (schedule it for posting)
 const acceptTweet = async (req, res) => {
     try {
-        const { tweetId, postType } = req.body;
+        const { tweetId, postType, account = 'maria' } = req.body;
 
         if (!tweetId) {
             return res.status(400).json({ error: 'tweetId is required' });
         }
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
 
         const tweet = await TwitterPost.findById(tweetId);
 
@@ -285,21 +321,46 @@ const acceptTweet = async (req, res) => {
             return res.status(404).json({ error: 'Tweet not found' });
         }
 
-        // Use smart scheduling algorithm
-        const scheduledTime = getSmartScheduleTime();
+        // Find the last tweet in queue (highest queue position)
+        const lastTweetInQueue = await TwitterPost.findOne({
+            isSelected: true,
+            isPosted: false,
+            queuePosition: { $ne: null }
+        }).sort('-queuePosition');
+
+        // Determine next queue position and scheduled time
+        let queuePosition, scheduledTime;
+
+        if (lastTweetInQueue) {
+            // Queue exists, add to end
+            queuePosition = lastTweetInQueue.queuePosition + 1;
+            console.log(`[ACCEPT] Adding tweet to queue position ${queuePosition}, last tweet was at position ${lastTweetInQueue.queuePosition}`);
+            // Calculate scheduled time from last tweet's scheduled time
+            scheduledTime = getSmartScheduleTimeFrom(lastTweetInQueue.scheduledFor);
+        } else {
+            // First tweet in queue
+            queuePosition = 1;
+            console.log(`[ACCEPT] First tweet in queue, position ${queuePosition}`);
+            // Calculate scheduled time from now
+            scheduledTime = getSmartScheduleTime();
+        }
+
         const now = new Date();
         const delayMs = scheduledTime.getTime() - now.getTime();
         const hours = Math.floor(delayMs / (1000 * 60 * 60));
         const minutes = Math.floor((delayMs % (1000 * 60 * 60)) / (1000 * 60));
 
         tweet.isSelected = true;
+        tweet.queuePosition = queuePosition;
         tweet.scheduledFor = scheduledTime;
         tweet.postType = postType || 'feed';
         await tweet.save();
 
         res.status(200).json({
             message: 'Tweet accepted and scheduled successfully',
+            account,
             tweet,
+            queuePosition,
             scheduledIn: `${hours}h ${minutes}m`,
             scheduledFor: scheduledTime,
             postType: tweet.postType
@@ -317,11 +378,14 @@ const acceptTweet = async (req, res) => {
 // Reject a tweet (delete it from database)
 const rejectTweet = async (req, res) => {
     try {
-        const { tweetId } = req.body;
+        const { tweetId, account = 'maria' } = req.body;
 
         if (!tweetId) {
             return res.status(400).json({ error: 'tweetId is required' });
         }
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
 
         const result = await TwitterPost.findByIdAndDelete(tweetId);
 
@@ -331,6 +395,7 @@ const rejectTweet = async (req, res) => {
 
         res.status(200).json({
             message: 'Tweet rejected and deleted successfully',
+            account,
             deletedTweet: result
         });
 
@@ -343,19 +408,82 @@ const rejectTweet = async (req, res) => {
     }
 };
 
-// Deselect tweets
+// Deselect tweets (with queue rebalancing)
 const deselectTweets = async (req, res) => {
     try {
-        const { tweetIds } = req.body;
+        const { tweetIds, account = 'maria' } = req.body;
 
-        const result = await TwitterPost.updateMany(
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
+
+        // Find the tweets being canceled to get their queue positions
+        const tweetsToCancel = await TwitterPost.find({
+            _id: { $in: tweetIds }
+        });
+
+        // Get the minimum queue position being removed
+        const minPosition = Math.min(...tweetsToCancel.map(t => t.queuePosition || Infinity));
+
+        // Deselect the tweets
+        await TwitterPost.updateMany(
             { _id: { $in: tweetIds } },
-            { isSelected: false, scheduledFor: null }
+            { isSelected: false, scheduledFor: null, queuePosition: null }
         );
 
+        // Rebalance queue: find all tweets with positions higher than the removed ones
+        const tweetsToRebalance = await TwitterPost.find({
+            isSelected: true,
+            isPosted: false,
+            queuePosition: { $gte: minPosition }
+        }).sort('queuePosition');
+
+        // Renumber and reschedule
+        if (tweetsToRebalance.length > 0) {
+            let currentPosition = minPosition;
+            let previousScheduledTime = null;
+
+            // Find the tweet before the rebalancing point to use as base time
+            if (minPosition > 1) {
+                const previousTweet = await TwitterPost.findOne({
+                    isSelected: true,
+                    isPosted: false,
+                    queuePosition: minPosition - 1
+                });
+                if (previousTweet) {
+                    previousScheduledTime = previousTweet.scheduledFor;
+                }
+            }
+
+            // If no previous tweet, use current time
+            const baseTime = previousScheduledTime || new Date();
+
+            for (const tweet of tweetsToRebalance) {
+                tweet.queuePosition = currentPosition;
+
+                // Calculate new scheduled time
+                if (currentPosition === 1 && !previousScheduledTime) {
+                    // First in queue, schedule from now
+                    tweet.scheduledFor = getSmartScheduleTime();
+                    console.log(`[REBALANCE] Position ${currentPosition}: First tweet, scheduling from now`);
+                } else {
+                    // Schedule based on previous tweet's scheduled time
+                    tweet.scheduledFor = getSmartScheduleTimeFrom(previousScheduledTime || baseTime);
+                    console.log(`[REBALANCE] Position ${currentPosition}: Scheduling from position ${currentPosition - 1}`);
+                }
+
+                await tweet.save();
+
+                // Update base time for next iteration
+                previousScheduledTime = tweet.scheduledFor;
+                currentPosition++;
+            }
+        }
+
         res.status(200).json({
-            message: 'Tweets deselected successfully',
-            count: result.modifiedCount
+            message: 'Tweets deselected and queue rebalanced successfully',
+            account,
+            count: tweetsToCancel.length,
+            rebalanced: tweetsToRebalance.length
         });
 
     } catch (error) {
@@ -378,10 +506,12 @@ const COMMUNITY_IDS = {
 };
 
 // Post a tweet to Twitter (feed or community)
-async function postTweetToTwitter(tweetText, postType = 'feed') {
+async function postTweetToTwitter(tweetText, postType = 'feed', account = 'maria') {
     try {
+        const writeClient = writeClients[account];
+
         if (!writeClient) {
-            console.error('Twitter write client not initialized');
+            console.error(`Twitter write client not initialized for account: ${account}`);
             return null;
         }
 
@@ -406,7 +536,7 @@ async function postTweetToTwitter(tweetText, postType = 'feed') {
             });
         }
 
-        console.log('Tweet posted:', result.data.id, 'to', postType);
+        console.log(`Tweet posted for ${account}:`, result.data.id, 'to', postType);
         return result.data;
 
     } catch (error) {
@@ -415,56 +545,64 @@ async function postTweetToTwitter(tweetText, postType = 'feed') {
     }
 }
 
-// Scheduler state
-let schedulerRunning = false;
-let schedulerJob = null;
+// Scheduler state - per account
+const schedulerRunning = {};
+const schedulerJobs = {};
 
 // Start the scheduler
 const startTwitterScheduler = async (req, res) => {
     try {
-        if (schedulerRunning) {
+        const { account = 'maria' } = req.query;
+
+        if (schedulerRunning[account]) {
             return res.status(200).json({
-                message: 'Scheduler is already running',
+                message: `Scheduler is already running for ${account}`,
+                account,
                 status: 'running'
             });
         }
 
-        schedulerRunning = true;
+        schedulerRunning[account] = true;
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
 
         // Check for scheduled tweets every minute
-        schedulerJob = schedule.scheduleJob('*/1 * * * *', async () => {
+        schedulerJobs[account] = schedule.scheduleJob('*/1 * * * *', async () => {
             try {
                 const now = new Date();
 
                 // Find tweets that are scheduled and due to be posted
+                // Sort by queuePosition to ensure exact order of selection
                 const tweetsToPost = await TwitterPost.find({
                     isSelected: true,
                     isPosted: false,
                     scheduledFor: { $lte: now }
-                }).sort('scheduledFor').limit(1);
+                }).sort('queuePosition').limit(1);
 
                 if (tweetsToPost.length > 0) {
                     const tweet = tweetsToPost[0];
 
                     // Post to Twitter (feed or community)
-                    const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed');
+                    const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed', account);
 
                     if (postedTweet) {
                         tweet.isPosted = true;
                         tweet.postedAt = new Date();
                         await tweet.save();
 
-                        console.log(`Posted tweet to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
+                        console.log(`Posted tweet for ${account} to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
                     }
                 }
 
             } catch (error) {
-                console.error('Error in scheduler:', error);
+                console.error(`Error in scheduler for ${account}:`, error);
             }
         });
 
         res.status(200).json({
-            message: 'Twitter scheduler started successfully',
+            message: `Twitter scheduler started successfully for ${account}`,
+            account,
             status: 'running'
         });
 
@@ -480,22 +618,26 @@ const startTwitterScheduler = async (req, res) => {
 // Stop the scheduler
 const stopTwitterScheduler = async (req, res) => {
     try {
-        if (!schedulerRunning) {
+        const { account = 'maria' } = req.query;
+
+        if (!schedulerRunning[account]) {
             return res.status(200).json({
-                message: 'Scheduler is not running',
+                message: `Scheduler is not running for ${account}`,
+                account,
                 status: 'stopped'
             });
         }
 
-        if (schedulerJob) {
-            schedulerJob.cancel();
-            schedulerJob = null;
+        if (schedulerJobs[account]) {
+            schedulerJobs[account].cancel();
+            schedulerJobs[account] = null;
         }
 
-        schedulerRunning = false;
+        schedulerRunning[account] = false;
 
         res.status(200).json({
-            message: 'Twitter scheduler stopped successfully',
+            message: `Twitter scheduler stopped successfully for ${account}`,
+            account,
             status: 'stopped'
         });
 
@@ -511,18 +653,26 @@ const stopTwitterScheduler = async (req, res) => {
 // Get scheduler status
 const getTwitterSchedulerStatus = async (req, res) => {
     try {
+        const { account = 'maria' } = req.query;
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
+
         const upcomingTweets = await TwitterPost.find({
             isSelected: true,
             isPosted: false,
             scheduledFor: { $exists: true }
-        }).sort('scheduledFor').limit(5);
+        }).sort('queuePosition').limit(5);
 
         res.status(200).json({
-            status: schedulerRunning ? 'running' : 'stopped',
+            account,
+            status: schedulerRunning[account] ? 'running' : 'stopped',
             upcomingTweets: upcomingTweets.map(t => ({
                 id: t._id,
                 text: t.text.substring(0, 100),
-                scheduledFor: t.scheduledFor
+                queuePosition: t.queuePosition,
+                scheduledFor: t.scheduledFor,
+                postType: t.postType
             }))
         });
 
@@ -538,7 +688,10 @@ const getTwitterSchedulerStatus = async (req, res) => {
 // Manual post (for testing)
 const manualPostTweet = async (req, res) => {
     try {
-        const { tweetId } = req.body;
+        const { tweetId, account = 'maria' } = req.body;
+
+        // Get account-specific model
+        const TwitterPost = getTwitterModelForAccount(account);
 
         const tweet = await TwitterPost.findById(tweetId);
 
@@ -547,7 +700,7 @@ const manualPostTweet = async (req, res) => {
         }
 
         // Post to Twitter with the specified postType (feed or community)
-        const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed');
+        const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed', account);
 
         if (postedTweet) {
             tweet.isPosted = true;
@@ -557,6 +710,7 @@ const manualPostTweet = async (req, res) => {
 
         res.status(200).json({
             message: `Tweet posted successfully to ${tweet.postType || 'feed'}`,
+            account,
             tweet,
             postedTo: tweet.postType || 'feed'
         });

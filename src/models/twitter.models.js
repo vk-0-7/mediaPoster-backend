@@ -23,6 +23,7 @@ const TwitterPostSchema = new mongoose.Schema({
     },
     isSelected: { type: Boolean, default: false },
     isPosted: { type: Boolean, default: false },
+    queuePosition: { type: Number, default: null }, // Position in posting queue (1, 2, 3...)
     scheduledFor: { type: Date },
     postedAt: { type: Date },
     postType: { type: String, default: 'feed' } // 'feed', 'buildinpublic', 'startup', 'softwareengineering'
@@ -30,6 +31,22 @@ const TwitterPostSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const TwitterPost = mongoose.model('TwitterPost', TwitterPostSchema);
+// Base model for default collection
+const TwitterPost = mongoose.models.TwitterPost || mongoose.model('TwitterPost', TwitterPostSchema);
+
+/**
+ * Get account-specific Twitter model
+ * Creates separate collections for each account (TwitterPost_maria, TwitterPost_divya)
+ * @param {string} account - Account name (maria, divya)
+ * @returns {Model} Mongoose model for the account
+ */
+function getTwitterModelForAccount(account) {
+    const normalized = (account || 'maria').toLowerCase();
+    const collectionName = `TwitterPost_${normalized}`;
+    const modelName = `TwitterPostModel_${normalized}`;
+
+    return mongoose.models[modelName] || mongoose.model(modelName, TwitterPostSchema, collectionName);
+}
 
 module.exports = TwitterPost;
+module.exports.getTwitterModelForAccount = getTwitterModelForAccount;

@@ -72,17 +72,41 @@ function getInstagramConfig(account) {
  * @returns {Object} Twitter credentials
  */
 function getTwitterConfig(account) {
-    const normalized = (account || '').toLowerCase();
+    const normalized = (account || 'maria').toLowerCase();
 
-    // Add Twitter account-specific credentials here
     switch (normalized) {
-        default:
+        case 'maria':
             return {
-                API_KEY: process.env.TWITTER_API_KEY,
-                API_SECRET: process.env.TWITTER_API_SECRET,
-                ACCESS_TOKEN: process.env.TWITTER_ACCESS_TOKEN,
-                ACCESS_SECRET: process.env.TWITTER_ACCESS_SECRET,
-                BEARER_TOKEN: process.env.TWITTER_BEARER_TOKEN,
+                API_KEY: process.env.X_API_KEY_FOR_MARIA,
+                API_SECRET: process.env.X_API_KEY_SECRET_FOR_MARIA,
+                ACCESS_TOKEN: process.env.X_ACCESS_TOKEN_FOR_MARIA,
+                ACCESS_SECRET: process.env.X_ACCESS_SECRET_FOR_MARIA,
+                BEARER_TOKEN: process.env.X_BEARER_TOKEN_FOR_MARIA,
+                CLIENT_ID: process.env.X_CLIENT_ID_MARIA,
+                CLIENT_SECRET: process.env.X_CLIENT_SECRET_MARIA,
+            };
+
+        case 'divya':
+            return {
+                API_KEY: process.env.X_API_KEY_FOR_DIVYA,
+                API_SECRET: process.env.X_API_KEY_SECRET_FOR_DIVYA,
+                ACCESS_TOKEN: process.env.X_ACCESS_TOKEN_FOR_DIVYA,
+                ACCESS_SECRET: process.env.X_ACCESS_SECRET_FOR_DIVYA,
+                BEARER_TOKEN: process.env.X_BEARER_TOKEN_FOR_DIVYA,
+                CLIENT_ID: process.env.X_CLIENT_ID_DIVYA,
+                CLIENT_SECRET: process.env.X_CLIENT_SECRET_DIVYA,
+            };
+
+        default:
+            // Default to Maria
+            return {
+                API_KEY: process.env.X_API_KEY_FOR_MARIA,
+                API_SECRET: process.env.X_API_KEY_SECRET_FOR_MARIA,
+                ACCESS_TOKEN: process.env.X_ACCESS_TOKEN_FOR_MARIA,
+                ACCESS_SECRET: process.env.X_ACCESS_SECRET_FOR_MARIA,
+                BEARER_TOKEN: process.env.X_BEARER_TOKEN_FOR_MARIA,
+                CLIENT_ID: process.env.X_CLIENT_ID_MARIA,
+                CLIENT_SECRET: process.env.X_CLIENT_SECRET_MARIA,
             };
     }
 }
