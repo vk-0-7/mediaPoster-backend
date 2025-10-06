@@ -24,7 +24,8 @@ const TwitterPostSchema = new mongoose.Schema({
     isSelected: { type: Boolean, default: false },
     isPosted: { type: Boolean, default: false },
     scheduledFor: { type: Date },
-    postedAt: { type: Date }
+    postedAt: { type: Date },
+    postType: { type: String, default: 'feed' } // 'feed', 'buildinpublic', 'startup', 'softwareengineering'
 }, {
     timestamps: true
 });

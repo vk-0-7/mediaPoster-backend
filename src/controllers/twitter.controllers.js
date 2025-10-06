@@ -234,10 +234,46 @@ const getTweets = async (req, res) => {
     }
 };
 
+// Smart scheduling algorithm based on time of day
+function getSmartScheduleTime() {
+    const now = new Date();
+    let scheduledTime = new Date(now);
+
+    const currentHour = now.getHours();
+
+    // Heavy posting period: 2pm (14:00) - 10pm (22:00) - Post every 1 hour
+    // Light posting period: 10pm (22:00) - 2pm (14:00) - Post every 3-4 hours
+
+    const isHeavyPeriod = currentHour >= 14 && currentHour < 22;
+
+    if (isHeavyPeriod) {
+        // Heavy posting: 1 hour interval with random minutes
+        const hours = 1;
+        const minutes = Math.floor(Math.random() * 60); // 0-59 minutes
+        const delayMs = (hours * 60 + minutes) * 60 * 1000;
+        scheduledTime = new Date(now.getTime() + delayMs);
+    } else {
+        // Light posting: 3-4 hours interval
+        const hours = Math.floor(Math.random() * 2) + 3; // 3-4 hours
+        const minutes = Math.floor(Math.random() * 60); // 0-59 minutes
+        let delayMs = (hours * 60 + minutes) * 60 * 1000;
+        scheduledTime = new Date(now.getTime() + delayMs);
+
+        // If scheduled time falls in heavy period, push it to next light period
+        const scheduledHour = scheduledTime.getHours();
+        if (scheduledHour >= 14 && scheduledHour < 22) {
+            // Push to 10pm (start of light period)
+            scheduledTime.setHours(22, Math.floor(Math.random() * 60), 0, 0);
+        }
+    }
+
+    return scheduledTime;
+}
+
 // Accept a tweet (schedule it for posting)
 const acceptTweet = async (req, res) => {
     try {
-        const { tweetId } = req.body;
+        const { tweetId, postType } = req.body;
 
         if (!tweetId) {
             return res.status(400).json({ error: 'tweetId is required' });
@@ -249,21 +285,24 @@ const acceptTweet = async (req, res) => {
             return res.status(404).json({ error: 'Tweet not found' });
         }
 
-        // Generate random delay between 2-4 hours and 0-60 minutes
-        const hours = Math.floor(Math.random() * 3) + 2; // 2-4 hours
-        const minutes = Math.floor(Math.random() * 61); // 0-60 minutes
-        const delayMs = (hours * 60 + minutes) * 60 * 1000;
-
-        const scheduledTime = new Date(Date.now() + delayMs);
+        // Use smart scheduling algorithm
+        const scheduledTime = getSmartScheduleTime();
+        const now = new Date();
+        const delayMs = scheduledTime.getTime() - now.getTime();
+        const hours = Math.floor(delayMs / (1000 * 60 * 60));
+        const minutes = Math.floor((delayMs % (1000 * 60 * 60)) / (1000 * 60));
 
         tweet.isSelected = true;
         tweet.scheduledFor = scheduledTime;
+        tweet.postType = postType || 'feed';
         await tweet.save();
 
         res.status(200).json({
             message: 'Tweet accepted and scheduled successfully',
             tweet,
-            scheduledIn: `${hours}h ${minutes}m`
+            scheduledIn: `${hours}h ${minutes}m`,
+            scheduledFor: scheduledTime,
+            postType: tweet.postType
         });
 
     } catch (error) {
@@ -328,16 +367,46 @@ const deselectTweets = async (req, res) => {
     }
 };
 
-// Post a tweet to Twitter
-async function postTweetToTwitter(tweetText) {
+// Community IDs mapping
+const COMMUNITY_IDS = {
+    softwareengineering: "1699807431709041070",
+    buildinpublic: "1493446837214187523",
+    webdevelopers: "1488952693443997701",
+    startup: "1471580197908586507",
+    memes: "1669501013441806336",
+    techtwitter: "1472105760389668865",
+};
+
+// Post a tweet to Twitter (feed or community)
+async function postTweetToTwitter(tweetText, postType = 'feed') {
     try {
         if (!writeClient) {
             console.error('Twitter write client not initialized');
             return null;
         }
 
-        const result = await writeClient.v2.tweet(tweetText);
-        console.log('Tweet posted:', result.data.id);
+        let result;
+
+        if (postType === 'feed') {
+            // Regular tweet to feed
+            result = await writeClient.v2.tweet(tweetText);
+        } else {
+            // Post to community
+            const communityId = COMMUNITY_IDS[postType.toLowerCase()];
+
+            if (!communityId) {
+                console.error('Invalid community type:', postType);
+                throw new Error(`Community type "${postType}" not found`);
+            }
+
+            // Post to community using community_id parameter
+            result = await writeClient.v2.tweet({
+                text: tweetText,
+                community_id: communityId
+            });
+        }
+
+        console.log('Tweet posted:', result.data.id, 'to', postType);
         return result.data;
 
     } catch (error) {
@@ -377,15 +446,15 @@ const startTwitterScheduler = async (req, res) => {
                 if (tweetsToPost.length > 0) {
                     const tweet = tweetsToPost[0];
 
-                    // Post to Twitter
-                    const postedTweet = await postTweetToTwitter(tweet.text);
+                    // Post to Twitter (feed or community)
+                    const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed');
 
                     if (postedTweet) {
                         tweet.isPosted = true;
                         tweet.postedAt = new Date();
                         await tweet.save();
 
-                        console.log(`Posted tweet: ${tweet.text.substring(0, 50)}...`);
+                        console.log(`Posted tweet to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
                     }
                 }
 
@@ -477,7 +546,8 @@ const manualPostTweet = async (req, res) => {
             return res.status(404).json({ error: 'Tweet not found' });
         }
 
-        const postedTweet = await postTweetToTwitter(tweet.text);
+        // Post to Twitter with the specified postType (feed or community)
+        const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed');
 
         if (postedTweet) {
             tweet.isPosted = true;
@@ -486,8 +556,9 @@ const manualPostTweet = async (req, res) => {
         }
 
         res.status(200).json({
-            message: 'Tweet posted successfully',
-            tweet
+            message: `Tweet posted successfully to ${tweet.postType || 'feed'}`,
+            tweet,
+            postedTo: tweet.postType || 'feed'
         });
 
     } catch (error) {
