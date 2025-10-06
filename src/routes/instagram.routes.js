@@ -6,8 +6,21 @@ const {
     manualPostController
 } = require('../controllers/instagram.scheduler');
 
+const {
+    uploadJSON,
+    getPosts
+} = require('../controllers/instagram.controllers');
+
 const router = express.Router();
 
+// Posts management
+// GET /api/instagram/posts?account=dreamchasers
+router.get('/posts', getPosts);
+
+// POST /api/instagram/uploadJSON?account=dreamchasers
+router.post('/uploadJSON', uploadJSON);
+
+// Scheduler endpoints
 // GET /api/instagram/scheduler/status?account=dreamchasers
 router.get('/scheduler/status', getSchedulerStatusController);
 

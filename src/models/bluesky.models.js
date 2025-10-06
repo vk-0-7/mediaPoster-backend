@@ -18,6 +18,7 @@ const BlueskyPostSchema = new mongoose.Schema({
     },
 });
 
-const BlueskyPost = mongoose.model('BlueskyPost', BlueskyPostSchema);
+// Check if model already exists before creating it
+const BlueskyPost = mongoose.models.BlueskyPost || mongoose.model('BlueskyPost', BlueskyPostSchema);
 
 module.exports = BlueskyPost;

@@ -49,7 +49,7 @@ const fetchUserTweets = async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Fetch user's tweets
+        // Fetch user's tweets (excluding retweets and replies)
         const tweets = await readClient.v2.userTimeline(user.data.id, {
             max_results: Math.min(parseInt(count), 100),
             'tweet.fields': ['created_at', 'public_metrics', 'author_id'],
@@ -503,7 +503,8 @@ module.exports = {
     fetchUserTweets,
     analyzeTweetsWithAI,
     getTweets,
-    selectTweetsForScheduling,
+    acceptTweet,
+    rejectTweet,
     deselectTweets,
     startTwitterScheduler,
     stopTwitterScheduler,

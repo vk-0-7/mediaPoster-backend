@@ -12,6 +12,7 @@ const ThreadsPostSchema = new mongoose.Schema({
     replyCount: { type: Number },
 });
 
-const ThreadsPost = mongoose.model('ThreadsPost', ThreadsPostSchema);
+// Check if model already exists before creating it
+const ThreadsPost = mongoose.models.ThreadsPost || mongoose.model('ThreadsPost', ThreadsPostSchema);
 
 module.exports = ThreadsPost;

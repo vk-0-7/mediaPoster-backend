@@ -4,7 +4,8 @@ const {
     fetchUserTweets,
     analyzeTweetsWithAI,
     getTweets,
-    selectTweetsForScheduling,
+    acceptTweet,
+    rejectTweet,
     deselectTweets,
     startTwitterScheduler,
     stopTwitterScheduler,
@@ -13,16 +14,23 @@ const {
 } = require('../controllers/twitter.controllers');
 
 // Fetch tweets from a user
+// GET /api/twitter/fetch?username=elonmusk&count=100
 router.get('/fetch', fetchUserTweets);
 
 // Analyze tweets with AI
 router.post('/analyze', analyzeTweetsWithAI);
 
 // Get all tweets with filters
+// GET /api/twitter/tweets?posted=false
 router.get('/tweets', getTweets);
 
-// Select tweets for scheduling
-router.post('/select', selectTweetsForScheduling);
+// Accept tweet (schedule for posting)
+// POST /api/twitter/accept { tweetId: "..." }
+router.post('/accept', acceptTweet);
+
+// Reject tweet (delete from database)
+// POST /api/twitter/reject { tweetId: "..." }
+router.post('/reject', rejectTweet);
 
 // Deselect tweets
 router.post('/deselect', deselectTweets);

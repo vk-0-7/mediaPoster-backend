@@ -26,6 +26,7 @@ const InstagramPostSchema = new mongoose.Schema({
     },
 });
 
-const InstagramPost = mongoose.model('InstagramPost', InstagramPostSchema);
+// Check if model already exists before creating it
+const InstagramPost = mongoose.models.InstagramPost || mongoose.model('InstagramPost', InstagramPostSchema);
 
 module.exports = InstagramPost;
