@@ -251,6 +251,7 @@ const getTweets = async (req, res) => {
     }
 };
 
+
 // Smart scheduling algorithm based on time of day
 // Calculates next schedule time from a given base time
 function getSmartScheduleTimeFrom(baseTime) {
@@ -267,18 +268,22 @@ function getSmartScheduleTimeFrom(baseTime) {
     // Heavy posting period: 1pm (13:00) - 8pm (20:00) IST - Post every 2-3 hours
     // Light posting period: 8pm (20:00) - 1pm (13:00) IST - Post every 4-5 hours
 
-    const isHeavyPeriod = istHour >= 13 && istHour < 20;
+    const isHeavyPeriod = istHour >= 13 && istHour < 23;
 
     let hours, minutes;
 
+
+
     if (isHeavyPeriod) {
         // Heavy posting: 2-3 hours interval with random minutes
-        hours = Math.floor(Math.random() * 2) + 2; // 2-3 hours
+        hours = Math.floor(Math.random() * 2) + 1; // 2-3 hours
         minutes = Math.floor(Math.random() * 60); // 0-59 minutes
+
     } else {
         // Light posting: 4-5 hours interval
         hours = Math.floor(Math.random() * 2) + 4; // 4-5 hours
         minutes = Math.floor(Math.random() * 60); // 0-59 minutes
+
     }
 
     // Calculate delay and scheduled time
@@ -549,99 +554,97 @@ async function postTweetToTwitter(tweetText, postType = 'feed', account = 'maria
 const schedulerRunning = {};
 const schedulerJobs = {};
 
-// Start the scheduler
-const startTwitterScheduler = async (req, res) => {
-    try {
-        const { account = 'maria' } = req.query;
+// Core scheduler logic (can be called without req/res)
+const startSchedulerForAccount = async (account = 'maria') => {
+    if (schedulerRunning[account]) {
+        console.log(`[INIT] Scheduler already running for ${account}`);
+        return { success: true, message: `Scheduler already running for ${account}`, status: 'running' };
+    }
 
-        if (schedulerRunning[account]) {
-            return res.status(200).json({
-                message: `Scheduler is already running for ${account}`,
-                account,
-                status: 'running'
+    schedulerRunning[account] = true;
+
+    // Get account-specific model
+    const TwitterPost = getTwitterModelForAccount(account);
+
+    // Check for scheduled tweets every minute
+    schedulerJobs[account] = schedule.scheduleJob('*/1 * * * *', async () => {
+        try {
+            const now = new Date();
+            console.log(`[SCHEDULER-${account.toUpperCase()}] Running check at ${now.toLocaleString()}`);
+
+            // First, let's see how many scheduled tweets exist
+            const totalScheduled = await TwitterPost.countDocuments({
+                isSelected: true,
+                isPosted: false,
+                scheduledFor: { $exists: true }
             });
-        }
 
-        schedulerRunning[account] = true;
+            console.log(`[SCHEDULER-${account.toUpperCase()}] Total scheduled tweets: ${totalScheduled}`);
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
+            // Find tweets that are scheduled and due to be posted
+            // Sort by queuePosition to ensure exact order of selection
+            const tweetsToPost = await TwitterPost.find({
+                isSelected: true,
+                isPosted: false,
+                scheduledFor: { $lte: now }
+            }).sort('queuePosition').limit(1);
 
-        // Check for scheduled tweets every minute
-        schedulerJobs[account] = schedule.scheduleJob('*/1 * * * *', async () => {
-            try {
-                const now = new Date();
-                console.log(`[SCHEDULER-${account.toUpperCase()}] Running check at ${now.toLocaleString()}`);
+            console.log(`[SCHEDULER-${account.toUpperCase()}] Tweets due now: ${tweetsToPost.length}`);
 
-                // First, let's see how many scheduled tweets exist
-                const totalScheduled = await TwitterPost.countDocuments({
+            if (tweetsToPost.length > 0) {
+                const tweet = tweetsToPost[0];
+                const timeUntil = Math.floor((tweet.scheduledFor - now) / (1000 * 60));
+                console.log(`[SCHEDULER-${account.toUpperCase()}] Found tweet to post:`, {
+                    id: tweet._id,
+                    queuePosition: tweet.queuePosition,
+                    scheduledFor: tweet.scheduledFor.toLocaleString(),
+                    timeUntil: `${timeUntil} minutes`,
+                    text: tweet.text.substring(0, 50) + '...'
+                });
+
+                // Post to Twitter (feed or community)
+                const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed', account);
+
+                if (postedTweet) {
+                    tweet.isPosted = true;
+                    tweet.postedAt = new Date();
+                    await tweet.save();
+
+                    console.log(`[SCHEDULER-${account.toUpperCase()}] ✅ Successfully posted tweet to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
+                } else {
+                    console.log(`[SCHEDULER-${account.toUpperCase()}] ❌ Failed to post tweet (postTweetToTwitter returned null)`);
+                }
+            } else {
+                // Show next upcoming tweet if no tweets are due
+                const nextTweet = await TwitterPost.findOne({
                     isSelected: true,
                     isPosted: false,
                     scheduledFor: { $exists: true }
-                });
+                }).sort('queuePosition');
 
-                console.log(`[SCHEDULER-${account.toUpperCase()}] Total scheduled tweets: ${totalScheduled}`);
-
-                // Find tweets that are scheduled and due to be posted
-                // Sort by queuePosition to ensure exact order of selection
-                const tweetsToPost = await TwitterPost.find({
-                    isSelected: true,
-                    isPosted: false,
-                    scheduledFor: { $lte: now }
-                }).sort('queuePosition').limit(1);
-
-                console.log(`[SCHEDULER-${account.toUpperCase()}] Tweets due now: ${tweetsToPost.length}`);
-
-                if (tweetsToPost.length > 0) {
-                    const tweet = tweetsToPost[0];
-                    const timeUntil = Math.floor((tweet.scheduledFor - now) / (1000 * 60));
-                    console.log(`[SCHEDULER-${account.toUpperCase()}] Found tweet to post:`, {
-                        id: tweet._id,
-                        queuePosition: tweet.queuePosition,
-                        scheduledFor: tweet.scheduledFor.toLocaleString(),
-                        timeUntil: `${timeUntil} minutes`,
-                        text: tweet.text.substring(0, 50) + '...'
-                    });
-
-                    // Post to Twitter (feed or community)
-                    const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed', account);
-
-                    if (postedTweet) {
-                        tweet.isPosted = true;
-                        tweet.postedAt = new Date();
-                        await tweet.save();
-
-                        console.log(`[SCHEDULER-${account.toUpperCase()}] ✅ Successfully posted tweet to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
-                    } else {
-                        console.log(`[SCHEDULER-${account.toUpperCase()}] ❌ Failed to post tweet (postTweetToTwitter returned null)`);
-                    }
+                if (nextTweet) {
+                    const minutesUntil = Math.floor((nextTweet.scheduledFor - now) / (1000 * 60));
+                    console.log(`[SCHEDULER-${account.toUpperCase()}] Next tweet scheduled in ${minutesUntil} minutes (${nextTweet.scheduledFor.toLocaleString()})`);
                 } else {
-                    // Show next upcoming tweet if no tweets are due
-                    const nextTweet = await TwitterPost.findOne({
-                        isSelected: true,
-                        isPosted: false,
-                        scheduledFor: { $exists: true }
-                    }).sort('queuePosition');
-
-                    if (nextTweet) {
-                        const minutesUntil = Math.floor((nextTweet.scheduledFor - now) / (1000 * 60));
-                        console.log(`[SCHEDULER-${account.toUpperCase()}] Next tweet scheduled in ${minutesUntil} minutes (${nextTweet.scheduledFor.toLocaleString()})`);
-                    } else {
-                        console.log(`[SCHEDULER-${account.toUpperCase()}] No scheduled tweets found`);
-                    }
+                    console.log(`[SCHEDULER-${account.toUpperCase()}] No scheduled tweets found`);
                 }
-
-            } catch (error) {
-                console.error(`[SCHEDULER-${account.toUpperCase()}] ❌ Error:`, error);
             }
-        });
 
-        res.status(200).json({
-            message: `Twitter scheduler started successfully for ${account}`,
-            account,
-            status: 'running'
-        });
+        } catch (error) {
+            console.error(`[SCHEDULER-${account.toUpperCase()}] ❌ Error:`, error);
+        }
+    });
 
+    console.log(`[INIT] Twitter scheduler started successfully for ${account}`);
+    return { success: true, message: `Twitter scheduler started successfully for ${account}`, account, status: 'running' };
+};
+
+// HTTP endpoint wrapper for starting scheduler
+const startTwitterScheduler = async (req, res) => {
+    try {
+        const { account = 'maria' } = req.query;
+        const result = await startSchedulerForAccount(account);
+        res.status(200).json(result);
     } catch (error) {
         console.error('Error starting scheduler:', error);
         res.status(500).json({
@@ -828,6 +831,32 @@ const manualPostTweet = async (req, res) => {
     }
 };
 
+// Initialize schedulers for all accounts on server start
+const initializeTwitterSchedulers = async () => {
+    try {
+        console.log('\n=================================');
+        console.log('🚀 Initializing Twitter Schedulers');
+        console.log('=================================\n');
+
+        const accounts = ['maria', 'divya'];
+
+        for (const account of accounts) {
+            try {
+                await startSchedulerForAccount(account);
+                console.log(`✅ Scheduler initialized for ${account}`);
+            } catch (error) {
+                console.error(`❌ Failed to initialize scheduler for ${account}:`, error.message);
+            }
+        }
+
+        console.log('\n=================================');
+        console.log('✅ Twitter Schedulers Initialization Complete');
+        console.log('=================================\n');
+    } catch (error) {
+        console.error('Error initializing Twitter schedulers:', error);
+    }
+};
+
 module.exports = {
     fetchUserTweets,
     analyzeTweetsWithAI,
@@ -839,5 +868,6 @@ module.exports = {
     stopTwitterScheduler,
     getTwitterSchedulerStatus,
     getSchedulerDiagnostics,
-    manualPostTweet
+    manualPostTweet,
+    initializeTwitterSchedulers
 };

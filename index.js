@@ -4,6 +4,7 @@ const express = require("express");
 const app = express();
 
 const dbConnect = require('./src/db');
+const { initializeTwitterSchedulers } = require('./src/controllers/twitter.controllers');
 
 const PORT = process.env.PORT || 8080;
 
@@ -39,6 +40,9 @@ app.get('/', (req, res) => {
 
 dbConnect().then(() => {
     console.log("Connected to MongoDB");
+
+    // Initialize Twitter schedulers after DB connection
+    initializeTwitterSchedulers();
 }).catch((err) => {
     console.error("MongoDB connection error:", err);
 });
