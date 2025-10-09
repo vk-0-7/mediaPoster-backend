@@ -571,6 +571,16 @@ const startTwitterScheduler = async (req, res) => {
         schedulerJobs[account] = schedule.scheduleJob('*/1 * * * *', async () => {
             try {
                 const now = new Date();
+                console.log(`[SCHEDULER-${account.toUpperCase()}] Running check at ${now.toLocaleString()}`);
+
+                // First, let's see how many scheduled tweets exist
+                const totalScheduled = await TwitterPost.countDocuments({
+                    isSelected: true,
+                    isPosted: false,
+                    scheduledFor: { $exists: true }
+                });
+
+                console.log(`[SCHEDULER-${account.toUpperCase()}] Total scheduled tweets: ${totalScheduled}`);
 
                 // Find tweets that are scheduled and due to be posted
                 // Sort by queuePosition to ensure exact order of selection
@@ -580,8 +590,18 @@ const startTwitterScheduler = async (req, res) => {
                     scheduledFor: { $lte: now }
                 }).sort('queuePosition').limit(1);
 
+                console.log(`[SCHEDULER-${account.toUpperCase()}] Tweets due now: ${tweetsToPost.length}`);
+
                 if (tweetsToPost.length > 0) {
                     const tweet = tweetsToPost[0];
+                    const timeUntil = Math.floor((tweet.scheduledFor - now) / (1000 * 60));
+                    console.log(`[SCHEDULER-${account.toUpperCase()}] Found tweet to post:`, {
+                        id: tweet._id,
+                        queuePosition: tweet.queuePosition,
+                        scheduledFor: tweet.scheduledFor.toLocaleString(),
+                        timeUntil: `${timeUntil} minutes`,
+                        text: tweet.text.substring(0, 50) + '...'
+                    });
 
                     // Post to Twitter (feed or community)
                     const postedTweet = await postTweetToTwitter(tweet.text, tweet.postType || 'feed', account);
@@ -591,12 +611,28 @@ const startTwitterScheduler = async (req, res) => {
                         tweet.postedAt = new Date();
                         await tweet.save();
 
-                        console.log(`Posted tweet for ${account} to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
+                        console.log(`[SCHEDULER-${account.toUpperCase()}] ✅ Successfully posted tweet to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
+                    } else {
+                        console.log(`[SCHEDULER-${account.toUpperCase()}] ❌ Failed to post tweet (postTweetToTwitter returned null)`);
+                    }
+                } else {
+                    // Show next upcoming tweet if no tweets are due
+                    const nextTweet = await TwitterPost.findOne({
+                        isSelected: true,
+                        isPosted: false,
+                        scheduledFor: { $exists: true }
+                    }).sort('queuePosition');
+
+                    if (nextTweet) {
+                        const minutesUntil = Math.floor((nextTweet.scheduledFor - now) / (1000 * 60));
+                        console.log(`[SCHEDULER-${account.toUpperCase()}] Next tweet scheduled in ${minutesUntil} minutes (${nextTweet.scheduledFor.toLocaleString()})`);
+                    } else {
+                        console.log(`[SCHEDULER-${account.toUpperCase()}] No scheduled tweets found`);
                     }
                 }
 
             } catch (error) {
-                console.error(`Error in scheduler for ${account}:`, error);
+                console.error(`[SCHEDULER-${account.toUpperCase()}] ❌ Error:`, error);
             }
         });
 
@@ -685,6 +721,74 @@ const getTwitterSchedulerStatus = async (req, res) => {
     }
 };
 
+// Diagnostic endpoint to check scheduler state
+const getSchedulerDiagnostics = async (req, res) => {
+    try {
+        const { account = 'maria' } = req.query;
+        const TwitterPost = getTwitterModelForAccount(account);
+        const now = new Date();
+
+        // Get all scheduled tweets
+        const scheduledTweets = await TwitterPost.find({
+            isSelected: true,
+            isPosted: false,
+            scheduledFor: { $exists: true }
+        }).sort('queuePosition');
+
+        // Get tweets that should have been posted by now
+        const overdueTweets = await TwitterPost.find({
+            isSelected: true,
+            isPosted: false,
+            scheduledFor: { $lte: now }
+        }).sort('queuePosition');
+
+        // Get upcoming tweets
+        const upcomingTweets = await TwitterPost.find({
+            isSelected: true,
+            isPosted: false,
+            scheduledFor: { $gt: now }
+        }).sort('queuePosition').limit(5);
+
+        res.status(200).json({
+            account,
+            schedulerRunning: schedulerRunning[account] || false,
+            schedulerJobExists: !!schedulerJobs[account],
+            currentTime: now.toLocaleString(),
+            currentTimeISO: now.toISOString(),
+            stats: {
+                totalScheduled: scheduledTweets.length,
+                overdue: overdueTweets.length,
+                upcoming: upcomingTweets.length
+            },
+            overdueTweets: overdueTweets.map(t => ({
+                id: t._id,
+                queuePosition: t.queuePosition,
+                scheduledFor: t.scheduledFor,
+                scheduledForLocale: t.scheduledFor.toLocaleString(),
+                minutesOverdue: Math.floor((now - t.scheduledFor) / (1000 * 60)),
+                text: t.text.substring(0, 100),
+                postType: t.postType
+            })),
+            upcomingTweets: upcomingTweets.map(t => ({
+                id: t._id,
+                queuePosition: t.queuePosition,
+                scheduledFor: t.scheduledFor,
+                scheduledForLocale: t.scheduledFor.toLocaleString(),
+                minutesUntil: Math.floor((t.scheduledFor - now) / (1000 * 60)),
+                text: t.text.substring(0, 100),
+                postType: t.postType
+            }))
+        });
+
+    } catch (error) {
+        console.error('Error getting diagnostics:', error);
+        res.status(500).json({
+            error: 'Failed to get diagnostics',
+            details: error.message
+        });
+    }
+};
+
 // Manual post (for testing)
 const manualPostTweet = async (req, res) => {
     try {
@@ -734,5 +838,6 @@ module.exports = {
     startTwitterScheduler,
     stopTwitterScheduler,
     getTwitterSchedulerStatus,
+    getSchedulerDiagnostics,
     manualPostTweet
 };

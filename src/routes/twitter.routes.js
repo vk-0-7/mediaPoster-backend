@@ -10,6 +10,7 @@ const {
     startTwitterScheduler,
     stopTwitterScheduler,
     getTwitterSchedulerStatus,
+    getSchedulerDiagnostics,
     manualPostTweet
 } = require('../controllers/twitter.controllers');
 
@@ -44,6 +45,8 @@ router.post('/scheduler/start', startTwitterScheduler);
 router.post('/scheduler/stop', stopTwitterScheduler);
 // GET /api/twitter/scheduler/status?account=maria
 router.get('/scheduler/status', getTwitterSchedulerStatus);
+// GET /api/twitter/scheduler/diagnostics?account=maria
+router.get('/scheduler/diagnostics', getSchedulerDiagnostics);
 
 // Manual post
 // POST /api/twitter/post { tweetId: "...", account: "maria" }
