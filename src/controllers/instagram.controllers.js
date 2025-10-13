@@ -12,7 +12,7 @@ async function uploadVideoFromUrl(videoUrl, account) {
     try {
         const result = await cloudinary.uploader.upload(videoUrl, {
             resource_type: "video",
-            folder: account !== "codingwithbugs" ? `videos/${account}` : "videos"
+            folder: account 
         });
         return result.secure_url;
     } catch (error) {
@@ -20,17 +20,17 @@ async function uploadVideoFromUrl(videoUrl, account) {
     }
 }
 
-function getPostModelForAccount(account) {
-    const normalized = (account || 'dreamchasers').toLowerCase();
-    const collectionName = normalized !== "codingwithbugs" ? `InstagramPost_${normalized}` : `InstagramPost`;
-    const modelName = normalized !== "codingwithbugs" ? `InstagramPostModel_${normalized}` : `InstagramPostModel`;
-    return mongoose.models[modelName] || mongoose.model(modelName, InstagramPost.schema, collectionName);
-}
 
 const uploadJSON = async (req, res) => {
     try {
-        const { data } = req.body;
-        const account = req.query.account || req.body.account || 'dreamchasers';
+
+        const data = req.body;
+
+
+        const account = req.query.account;
+        if (!account) {
+            res.status(404).json({ success: false, message: "Please mention the account name " })
+        }
 
         if (!data || !Array.isArray(data)) {
             return res.status(400).json({ error: 'Data must be an array of posts' });
@@ -38,18 +38,18 @@ const uploadJSON = async (req, res) => {
 
         // Validate and prepare data
         const validatedData = data.map((post, index) => {
-            if (!post.id) {
-                post.id = `post_${Date.now()}_${index}`;
-            }
+
             if (post.isPosted === undefined) {
                 post.isPosted = false;
+            }
+            if (!post.account) {
+                post.account = account;
             }
             return post;
         });
 
-        // Save posts to DB
-        const PostModel = getPostModelForAccount(account);
-        const posts = await PostModel.insertMany(validatedData);
+
+        const posts = await InstagramPost.insertMany(validatedData);
 
         // Update videoUrl if needed
         for (const post of posts) {
@@ -76,18 +76,18 @@ const uploadJSON = async (req, res) => {
 };
 
 const getPosts = async (req, res) => {
-    try {
-        const account = (req.query.account || 'dreamchasers').toLowerCase();
-        const PostModel = getPostModelForAccount(account);
-        const posts = await PostModel.find();
-        res.status(200).json(posts);
-    } catch (error) {
-        console.error('Error getting posts:', error);
-        res.status(500).json({
-            error: 'Failed to get posts',
-            details: error.message
-        });
-    }
+    //     try {
+    //         const account = (req.query.account || 'dreamchasers').toLowerCase();
+    //         const PostModel = getPostModelForAccount(account);
+    //         const posts = await PostModel.find();
+    //         res.status(200).json(posts);
+    //     } catch (error) {
+    //         console.error('Error getting posts:', error);
+    //         res.status(500).json({
+    //             error: 'Failed to get posts',
+    //             details: error.message
+    //         });
+    //     }
 };
 
 module.exports = { uploadJSON, getPosts };

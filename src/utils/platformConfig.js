@@ -8,8 +8,8 @@ dotenv.config();
  * @returns {Object} Platform-specific credentials
  */
 function getPlatformConfig(platform, account) {
-    const normalizedPlatform = (platform || '').toLowerCase();
-    const normalizedAccount = (account || '').toLowerCase();
+    const normalizedPlatform = platform
+    const normalizedAccount = account;
 
     switch (normalizedPlatform) {
         case 'instagram':
@@ -35,29 +35,28 @@ function getPlatformConfig(platform, account) {
  * @returns {Object} Instagram credentials
  */
 function getInstagramConfig(account) {
-    const normalized = (account || '').toLowerCase();
+    const normalized = account;
 
     switch (normalized) {
-        case 'codingwithbugs':
+        case 'coding_with_bugs':
             return {
                 PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_CODINGWITHBUGS,
                 ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_CODINGWITHBUGS,
             };
 
         case 'vallendros':
-        case 'vellandros':
             return {
                 PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_VELLANDROS,
                 ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_VELLANDROS,
             };
 
-        case 'dailyaiinsights':
+        case 'dailyAIInsights':
             return {
                 PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_DAILY_AI_INSIGHTS,
                 ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_DAILY_AI_INSIGHTS,
             };
 
-        case 'dreamchasers':
+        case 'dream_chasers':
         default:
             return {
                 PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_DREAMCHASERS,
@@ -75,7 +74,7 @@ function getTwitterConfig(account) {
     const normalized = (account || 'maria').toLowerCase();
 
     switch (normalized) {
-        case 'maria':
+        case 'maria_in_tech':
             return {
                 API_KEY: process.env.X_API_KEY_FOR_MARIA,
                 API_SECRET: process.env.X_API_KEY_SECRET_FOR_MARIA,
@@ -86,7 +85,7 @@ function getTwitterConfig(account) {
                 CLIENT_SECRET: process.env.X_CLIENT_SECRET_MARIA,
             };
 
-        case 'divya':
+        case 'me_divya':
             return {
                 API_KEY: process.env.X_API_KEY_FOR_DIVYA,
                 API_SECRET: process.env.X_API_KEY_SECRET_FOR_DIVYA,
@@ -156,8 +155,8 @@ function getThreadsConfig(account) {
  * @returns {string} Customized caption
  */
 function getCustomCaption(platform, account, caption) {
-    const normalizedPlatform = (platform || '').toLowerCase();
-    const normalizedAccount = (account || '').toLowerCase();
+    const normalizedPlatform = (platform || '')
+    const normalizedAccount = (account || '')
 
     if (normalizedPlatform === 'instagram') {
         switch (normalizedAccount) {

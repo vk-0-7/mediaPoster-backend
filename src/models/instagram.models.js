@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const InstagramPostSchema = new mongoose.Schema({
     id: { type: String, required: true },
     isPosted: { type: Boolean, required: true, default: false },
+    account: { type: String, require: true },
     type: { type: String, },
     caption: { type: String, },
     hashtags: { type: Array },

@@ -3,7 +3,7 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 const mongoose = require('mongoose');
 const InstagramPost = require('../models/instagram.models');
-const { sendEmail } = require("../utils/email");
+// const { sendEmail } = require("../utils/email");
 const { getPlatformConfig, getCustomCaption } = require("../utils/platformConfig");
 
 const START_HOUR = 8 - 5.5;
@@ -15,26 +15,86 @@ let startedAt = {};
 
 dotenv.config();
 
-function getPostModelForAccount(account) {
-    const normalized = (account || 'dreamchasers').toLowerCase();
-    const collectionName = normalized !== "codingwithbugs" ? `InstagramPost_${normalized}` : `InstagramPost`;
-    const modelName = normalized !== "codingwithbugs" ? `InstagramPostModel_${normalized}` : `InstagramPostModel`;
-    return mongoose.models[modelName] || mongoose.model(modelName, InstagramPost.schema, collectionName);
+
+
+async function postStories(videoUrl, account) {
+    try {
+        const { PAGE_ID, ACCESS_TOKEN } = getPlatformConfig('instagram', account);
+
+
+        let containerId = null;
+
+        try {
+            const createRes = await axios.post(
+                `https://graph.facebook.com/v23.0/${PAGE_ID}/media`,
+                null,
+                {
+                    params: {
+                        media_type: "STORIES",
+                        video_url: videoUrl,
+                        access_token: ACCESS_TOKEN,
+                    }
+                },
+            );
+
+            containerId = createRes.data.id;
+        } catch (error) {
+            console.error("Error creating video container:", error);
+            return;
+        }
+
+        // 3. Wait and check status
+        let status = "IN_PROGRESS";
+        while (status === "IN_PROGRESS") {
+            await new Promise((resolve) => setTimeout(resolve, 60000)); // wait 1 min
+
+            const statusRes = await axios.get(
+                `https://graph.facebook.com/v23.0/${containerId}?fields=status_code&access_token=${ACCESS_TOKEN}`
+            );
+
+            status = statusRes.data.status_code;
+            console.log("Upload status:", status);
+        }
+
+        if (status !== "FINISHED") {
+            console.error("Upload failed with status:", status);
+            return;
+        }
+
+        // 4. Publish video
+        const publishRes = await axios.post(
+            `https://graph.facebook.com/v23.0/${PAGE_ID}/media_publish`,
+            {
+                creation_id: containerId,
+                access_token: ACCESS_TOKEN,
+            }
+        );
+
+        console.log("Published reel:", publishRes.data);
+
+        console.log(`🔥 Marked Story as posted.🔥`);
+
+    } catch (error) {
+        console.error("Error posting reel:", error.response?.data || error.message);
+        // sendEmail('Instagram Post Error', `Error posting from account ${account}: ${error.message}`)
+    }
 }
+
 
 async function postReel(account) {
     try {
         const { PAGE_ID, ACCESS_TOKEN } = getPlatformConfig('instagram', account);
-        const PostModel = getPostModelForAccount(account);
 
-        // 1. Get unposted content from DB
-        const unpostedPost = await PostModel.findOne({ isPosted: false });
+        console.log(account);
+
+        const unpostedPost = await InstagramPost.findOne({ isPosted: false, account: account });
         if (!unpostedPost) {
             console.log("No unposted content available");
             return;
         }
 
         const { videoUrl, caption } = unpostedPost;
+        await postStories(videoUrl, account)
         let containerId = null;
 
         try {
@@ -88,12 +148,12 @@ async function postReel(account) {
         console.log("Published reel:", publishRes.data);
 
         // 5. Update DB
-        await PostModel.findByIdAndUpdate(unpostedPost._id, { isPosted: true });
+        await InstagramPost.findByIdAndUpdate(unpostedPost._id, { isPosted: true });
         console.log(`Marked post ${unpostedPost._id} as posted.`);
 
     } catch (error) {
         console.error("Error posting reel:", error.response?.data || error.message);
-        sendEmail('Instagram Post Error', `Error posting from account ${account}: ${error.message}`)
+        // sendEmail('Instagram Post Error', `Error posting from account ${account}: ${error.message}`)
     }
 }
 
@@ -196,7 +256,7 @@ function getSchedulerStatus(account) {
 // Controller functions for API endpoints
 const startSchedulerController = async (req, res) => {
     try {
-        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        const account = req.query.account
         const result = startScheduler(account);
         res.status(200).json(result);
     } catch (error) {
@@ -207,7 +267,7 @@ const startSchedulerController = async (req, res) => {
 
 const stopSchedulerController = async (req, res) => {
     try {
-        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        const account = req.query.account 
         const result = stopScheduler(account);
         res.status(200).json(result);
     } catch (error) {
@@ -218,7 +278,7 @@ const stopSchedulerController = async (req, res) => {
 
 const getSchedulerStatusController = async (req, res) => {
     try {
-        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        const account = req.query.account 
         const status = getSchedulerStatus(account);
         res.status(200).json(status);
     } catch (error) {
@@ -229,7 +289,7 @@ const getSchedulerStatusController = async (req, res) => {
 
 const manualPostController = async (req, res) => {
     try {
-        const account = (req.query.account || 'dreamchasers').toLowerCase();
+        const account = req.query.account;
         await postReel(account);
         res.status(200).json({ message: "Post triggered manually" });
     } catch (error) {

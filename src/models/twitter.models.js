@@ -41,7 +41,7 @@ const TwitterPost = mongoose.models.TwitterPost || mongoose.model('TwitterPost',
  * @returns {Model} Mongoose model for the account
  */
 function getTwitterModelForAccount(account) {
-    const normalized = (account || 'maria').toLowerCase();
+    const normalized = (account || 'maria')
     const collectionName = `TwitterPost_${normalized}`;
     const modelName = `TwitterPostModel_${normalized}`;
 
