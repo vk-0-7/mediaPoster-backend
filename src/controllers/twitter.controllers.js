@@ -1,8 +1,8 @@
 const { TwitterApi } = require('twitter-api-v2');
-const { getTwitterModelForAccount } = require('../models/twitter.models');
 const { getTwitterConfig } = require('../utils/platformConfig');
 const schedule = require('node-schedule');
 const axios = require('axios');
+const TwitterPost = require('../models/twitter.models')
 
 // Store Twitter clients per account
 const readClients = {};
@@ -106,6 +106,37 @@ const fetchUserTweets = async (req, res) => {
         });
     }
 };
+
+const createNewPost = async (req, res) => {
+
+    try {
+        const data = req.body;
+        const Id = Date.now();
+        const account = req.query.account;
+
+        if (!account) {
+            res.status(402).json({ success: false, message: "No account found" });
+            return
+        }
+        TwitterPost.insertOne({
+            tweetId: Id,
+            text: data,
+            account: account,
+        })
+
+        res.status(201).json({ success: true, message: "Post successfully added" });
+
+
+    } catch (error) {
+        res.status(201).json({ success: false, message: "Error occured" });
+    }
+
+
+
+
+
+
+}
 
 // Analyze tweets with AI (using Anthropic Claude API)
 const analyzeTweetsWithAI = async (req, res) => {
@@ -563,8 +594,6 @@ const startSchedulerForAccount = async (account = 'maria') => {
 
     schedulerRunning[account] = true;
 
-    // Get account-specific model
-    const TwitterPost = getTwitterModelForAccount(account);
 
     // Check for scheduled tweets every minute
     schedulerJobs[account] = schedule.scheduleJob('*/1 * * * *', async () => {
@@ -694,8 +723,7 @@ const getTwitterSchedulerStatus = async (req, res) => {
     try {
         const { account = 'maria' } = req.query;
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
+
 
         const upcomingTweets = await TwitterPost.find({
             isSelected: true,
@@ -728,7 +756,6 @@ const getTwitterSchedulerStatus = async (req, res) => {
 const getSchedulerDiagnostics = async (req, res) => {
     try {
         const { account = 'maria' } = req.query;
-        const TwitterPost = getTwitterModelForAccount(account);
         const now = new Date();
 
         // Get all scheduled tweets
@@ -869,5 +896,6 @@ module.exports = {
     getTwitterSchedulerStatus,
     getSchedulerDiagnostics,
     manualPostTweet,
-    initializeTwitterSchedulers
+    initializeTwitterSchedulers,
+    createNewPost,
 };

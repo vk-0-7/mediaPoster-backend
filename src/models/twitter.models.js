@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const TwitterPostSchema = new mongoose.Schema({
     tweetId: { type: String, required: true, unique: true },
     text: { type: String, required: true },
+    account: { type: String },
     author: {
         id: { type: String },
         username: { type: String },
@@ -34,19 +35,6 @@ const TwitterPostSchema = new mongoose.Schema({
 // Base model for default collection
 const TwitterPost = mongoose.models.TwitterPost || mongoose.model('TwitterPost', TwitterPostSchema);
 
-/**
- * Get account-specific Twitter model
- * Creates separate collections for each account (TwitterPost_maria, TwitterPost_divya)
- * @param {string} account - Account name (maria, divya)
- * @returns {Model} Mongoose model for the account
- */
-function getTwitterModelForAccount(account) {
-    const normalized = (account || 'maria')
-    const collectionName = `TwitterPost_${normalized}`;
-    const modelName = `TwitterPostModel_${normalized}`;
 
-    return mongoose.models[modelName] || mongoose.model(modelName, TwitterPostSchema, collectionName);
-}
 
 module.exports = TwitterPost;
-module.exports.getTwitterModelForAccount = getTwitterModelForAccount;
