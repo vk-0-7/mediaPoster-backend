@@ -33,10 +33,53 @@ function initializeTwitterClient(account = 'maria') {
 initializeTwitterClient('maria');
 initializeTwitterClient('divya');
 
+const uploadTwitterData = async (req, res) => {
+    try {
+        // console.log(req.body.data[0]);
+        // console.log(req.query)
+
+        const { data } = req.body;
+        const account = req.query.account;
+
+        if (!account) {
+            res.status(400).json({
+                message: 'No account found',
+
+            });
+        }
+        const newData = data?.map((v) => {
+            if (v.account === undefined) {
+                v.account = account;
+            }
+            if (v.tweetId) {
+                v.tweetId = Date.now().toString() + Math.random();
+            }
+            delete v.createdAt;
+            delete v.scheduledFor;
+            delete v._id;
+            delete v.updatedAt;
+
+            return v;
+        })
+        const posts = await TwitterPost.insertMany(newData)
+        res.status(200).json({
+            message: 'Posts uploaded successfully',
+            count: posts.length,
+            posts
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: "Failed to upload post " + error,
+            success: false
+        })
+    }
+
+}
+
 // Fetch tweets from a specific user
 const fetchUserTweets = async (req, res) => {
     try {
-        const { username, count = 20, account = 'maria' } = req.query;
+        const { username, count = 20, account } = req.query;
 
         if (!username) {
             return res.status(400).json({ error: 'Username is required' });
@@ -47,8 +90,7 @@ const fetchUserTweets = async (req, res) => {
             return res.status(500).json({ error: `Twitter client not initialized for account: ${account}` });
         }
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
+
 
         // Get user by username
         const user = await readClient.v2.userByUsername(username);
@@ -71,6 +113,7 @@ const fetchUserTweets = async (req, res) => {
                 { tweetId: tweet.id },
                 {
                     tweetId: tweet.id,
+                    account: account,
                     text: tweet.text,
                     author: {
                         id: user.data.id,
@@ -138,116 +181,11 @@ const createNewPost = async (req, res) => {
 
 }
 
-// Analyze tweets with AI (using Anthropic Claude API)
-const analyzeTweetsWithAI = async (req, res) => {
-    try {
-        const { apiKey, account = 'maria' } = req.body;
-
-        if (!apiKey) {
-            return res.status(400).json({ error: 'Claude API key is required in request body' });
-        }
-
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
-
-        // Get all unanalyzed tweets
-        const tweets = await TwitterPost.find({
-            'aiAnalysis.score': { $exists: false }
-        }).limit(50);
-
-        if (tweets.length === 0) {
-            return res.status(200).json({
-                message: 'No tweets to analyze',
-                analyzed: 0
-            });
-        }
-
-        const analyzedTweets = [];
-
-        for (const tweet of tweets) {
-            try {
-                // Call Claude API for analysis
-                const response = await axios.post(
-                    'https://api.anthropic.com/v1/messages',
-                    {
-                        model: 'claude-3-5-sonnet-20241022',
-                        max_tokens: 500,
-                        messages: [{
-                            role: 'user',
-                            content: `Analyze this tweet and provide a JSON response with the following structure:
-{
-  "score": <number 1-10>,
-  "category": "<motivational|technical|humorous|informational|other>",
-  "summary": "<brief summary>",
-  "reasoning": "<why this tweet is good/bad>"
-}
-
-Tweet: "${tweet.text}"
-
-Metrics: ${tweet.metrics.likes} likes, ${tweet.metrics.retweets} retweets
-
-Rate the tweet's quality for reposting based on engagement potential, relevance, and content quality.`
-                        }]
-                    },
-                    {
-                        headers: {
-                            'x-api-key': apiKey,
-                            'anthropic-version': '2023-06-01',
-                            'content-type': 'application/json'
-                        }
-                    }
-                );
-
-                // Parse AI response
-                const aiContent = response.data.content[0].text;
-                const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
-
-                if (jsonMatch) {
-                    const analysis = JSON.parse(jsonMatch[0]);
-
-                    // Update tweet with AI analysis
-                    tweet.aiAnalysis = {
-                        score: analysis.score,
-                        category: analysis.category,
-                        summary: analysis.summary,
-                        reasoning: analysis.reasoning
-                    };
-
-                    await tweet.save();
-                    analyzedTweets.push(tweet);
-                }
-
-                // Rate limiting - wait 1 second between requests
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-            } catch (error) {
-                console.error(`Error analyzing tweet ${tweet.tweetId}:`, error.message);
-            }
-        }
-
-        res.status(200).json({
-            message: 'Tweets analyzed successfully',
-            account,
-            analyzed: analyzedTweets.length,
-            tweets: analyzedTweets
-        });
-
-    } catch (error) {
-        console.error('Error in AI analysis:', error);
-        res.status(500).json({
-            error: 'Failed to analyze tweets',
-            details: error.message
-        });
-    }
-};
-
-// Get all tweets with optional filters
 const getTweets = async (req, res) => {
     try {
         const { analyzed, selected, posted, sortBy = '-aiAnalysis.score', account = 'maria' } = req.query;
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
+
 
         const filter = {};
 
@@ -322,7 +260,7 @@ function getSmartScheduleTimeFrom(baseTime) {
     const scheduledTime = new Date(base.getTime() + delayMs);
 
     // Debug logging
-    console.log(`[SCHEDULER] Base: ${base.toLocaleString()}, UTC Hour: ${utcHour}, IST Hour: ${istHour}, Heavy: ${isHeavyPeriod}, Interval: ${hours}h ${minutes}m, Scheduled: ${scheduledTime.toLocaleString()}, Gap: ${(delayMs / (1000 * 60 * 60)).toFixed(2)}hrs`);
+
 
     return scheduledTime;
 }
@@ -335,7 +273,7 @@ function getSmartScheduleTime() {
     const istHourDecimal = utcHour + utcMinutes/60 + 5.5;
     const istHour = Math.floor(istHourDecimal % 24);
 
-    console.log(`[SCHEDULER] Server UTC time: ${now.toLocaleString()}, UTC Hour: ${utcHour}, IST Hour: ${istHour}`);
+
     return getSmartScheduleTimeFrom(now);
 }
 
@@ -348,8 +286,7 @@ const acceptTweet = async (req, res) => {
             return res.status(400).json({ error: 'tweetId is required' });
         }
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
+
 
         const tweet = await TwitterPost.findById(tweetId);
 
@@ -370,8 +307,7 @@ const acceptTweet = async (req, res) => {
         if (lastTweetInQueue) {
             // Queue exists, add to end
             queuePosition = lastTweetInQueue.queuePosition + 1;
-            console.log(`[ACCEPT] Adding tweet to queue position ${queuePosition}, last tweet was at position ${lastTweetInQueue.queuePosition}`);
-            // Calculate scheduled time from last tweet's scheduled time
+
             scheduledTime = getSmartScheduleTimeFrom(lastTweetInQueue.scheduledFor);
         } else {
             // First tweet in queue
@@ -420,8 +356,7 @@ const rejectTweet = async (req, res) => {
             return res.status(400).json({ error: 'tweetId is required' });
         }
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
+
 
         const result = await TwitterPost.findByIdAndDelete(tweetId);
 
@@ -449,8 +384,6 @@ const deselectTweets = async (req, res) => {
     try {
         const { tweetIds, account = 'maria' } = req.body;
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
 
         // Find the tweets being canceled to get their queue positions
         const tweetsToCancel = await TwitterPost.find({
@@ -599,26 +532,20 @@ const startSchedulerForAccount = async (account = 'maria') => {
     schedulerJobs[account] = schedule.scheduleJob('*/1 * * * *', async () => {
         try {
             const now = new Date();
-            console.log(`[SCHEDULER-${account.toUpperCase()}] Running check at ${now.toLocaleString()}`);
 
-            // First, let's see how many scheduled tweets exist
             const totalScheduled = await TwitterPost.countDocuments({
                 isSelected: true,
                 isPosted: false,
                 scheduledFor: { $exists: true }
             });
 
-            console.log(`[SCHEDULER-${account.toUpperCase()}] Total scheduled tweets: ${totalScheduled}`);
 
-            // Find tweets that are scheduled and due to be posted
-            // Sort by queuePosition to ensure exact order of selection
             const tweetsToPost = await TwitterPost.find({
                 isSelected: true,
                 isPosted: false,
                 scheduledFor: { $lte: now }
             }).sort('queuePosition').limit(1);
 
-            console.log(`[SCHEDULER-${account.toUpperCase()}] Tweets due now: ${tweetsToPost.length}`);
 
             if (tweetsToPost.length > 0) {
                 const tweet = tweetsToPost[0];
@@ -822,10 +749,8 @@ const getSchedulerDiagnostics = async (req, res) => {
 // Manual post (for testing)
 const manualPostTweet = async (req, res) => {
     try {
-        const { tweetId, account = 'maria' } = req.body;
+        const { tweetId, account } = req.body;
 
-        // Get account-specific model
-        const TwitterPost = getTwitterModelForAccount(account);
 
         const tweet = await TwitterPost.findById(tweetId);
 
@@ -886,7 +811,6 @@ const initializeTwitterSchedulers = async () => {
 
 module.exports = {
     fetchUserTweets,
-    analyzeTweetsWithAI,
     getTweets,
     acceptTweet,
     rejectTweet,
@@ -898,4 +822,5 @@ module.exports = {
     manualPostTweet,
     initializeTwitterSchedulers,
     createNewPost,
+    uploadTwitterData
 };

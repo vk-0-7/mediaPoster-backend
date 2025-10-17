@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const {
     fetchUserTweets,
-    analyzeTweetsWithAI,
     getTweets,
     acceptTweet,
     rejectTweet,
@@ -12,18 +11,17 @@ const {
     getTwitterSchedulerStatus,
     getSchedulerDiagnostics,
     manualPostTweet,
-    createNewPost
+    createNewPost,
+    uploadTwitterData
 } = require('../controllers/twitter.controllers');
 
-// Fetch tweets from a user
-// GET /api/twitter/fetch?username=elonmusk&count=100&account=maria
+
 router.get('/fetch', fetchUserTweets);
+
+router.post('/upload', uploadTwitterData)
 
 router.post('/add', createNewPost)
 
-// Analyze tweets with AI
-// POST /api/twitter/analyze { apiKey: "...", account: "maria" }
-router.post('/analyze', analyzeTweetsWithAI);
 
 // Get all tweets with filters
 // GET /api/twitter/tweets?posted=false&account=maria
