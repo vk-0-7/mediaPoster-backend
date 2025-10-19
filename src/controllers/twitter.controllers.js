@@ -199,7 +199,7 @@ const getTweets = async (req, res) => {
 
 
         const tweets = await TwitterPost.find(filter);
-        console.log(tweets);
+        // console.log(tweets);
 
 
         res.status(200).json({
@@ -285,7 +285,7 @@ const acceptTweet = async (req, res) => {
 
 
 
-        const tweet = await TwitterPost.findOne({ tweetId, account });
+        const tweet = await TwitterPost.findById(tweetId);
 
         if (!tweet) {
             return res.status(404).json({ error: 'Tweet not found' });
