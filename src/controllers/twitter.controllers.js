@@ -183,27 +183,24 @@ const createNewPost = async (req, res) => {
 
 const getTweets = async (req, res) => {
     try {
-        const { analyzed, selected, posted, sortBy = '-aiAnalysis.score', account = 'maria' } = req.query;
+        const { analyzed, selected, posted, account = 'maria' } = req.query;
 
 
 
         const filter = {};
 
-        if (analyzed === 'true') {
-            filter['aiAnalysis.score'] = { $exists: true };
-        } else if (analyzed === 'false') {
-            filter['aiAnalysis.score'] = { $exists: false };
+        // IMPORTANT: Filter by account
+        if (account) {
+            filter.account = account;
         }
+        filter.isPosted = false;
 
-        if (selected !== undefined) {
-            filter.isSelected = selected === 'true';
-        }
 
-        if (posted !== undefined) {
-            filter.isPosted = posted === 'true';
-        }
 
-        const tweets = await TwitterPost.find(filter).sort(sortBy);
+
+        const tweets = await TwitterPost.find(filter);
+        console.log(tweets);
+
 
         res.status(200).json({
             account,
@@ -288,14 +285,15 @@ const acceptTweet = async (req, res) => {
 
 
 
-        const tweet = await TwitterPost.findById(tweetId);
+        const tweet = await TwitterPost.findOne({ tweetId, account });
 
         if (!tweet) {
             return res.status(404).json({ error: 'Tweet not found' });
         }
 
-        // Find the last tweet in queue (highest queue position)
+        // Find the last tweet in queue (highest queue position) FOR THIS ACCOUNT
         const lastTweetInQueue = await TwitterPost.findOne({
+            account: account,
             isSelected: true,
             isPosted: false,
             queuePosition: { $ne: null }
@@ -387,7 +385,8 @@ const deselectTweets = async (req, res) => {
 
         // Find the tweets being canceled to get their queue positions
         const tweetsToCancel = await TwitterPost.find({
-            _id: { $in: tweetIds }
+            _id: { $in: tweetIds },
+            account: account
         });
 
         // Get the minimum queue position being removed
@@ -395,12 +394,13 @@ const deselectTweets = async (req, res) => {
 
         // Deselect the tweets
         await TwitterPost.updateMany(
-            { _id: { $in: tweetIds } },
+            { _id: { $in: tweetIds }, account: account },
             { isSelected: false, scheduledFor: null, queuePosition: null }
         );
 
-        // Rebalance queue: find all tweets with positions higher than the removed ones
+        // Rebalance queue: find all tweets with positions higher than the removed ones FOR THIS ACCOUNT
         const tweetsToRebalance = await TwitterPost.find({
+            account: account,
             isSelected: true,
             isPosted: false,
             queuePosition: { $gte: minPosition }
@@ -411,9 +411,10 @@ const deselectTweets = async (req, res) => {
             let currentPosition = minPosition;
             let previousScheduledTime = null;
 
-            // Find the tweet before the rebalancing point to use as base time
+            // Find the tweet before the rebalancing point to use as base time FOR THIS ACCOUNT
             if (minPosition > 1) {
                 const previousTweet = await TwitterPost.findOne({
+                    account: account,
                     isSelected: true,
                     isPosted: false,
                     queuePosition: minPosition - 1
@@ -534,6 +535,7 @@ const startSchedulerForAccount = async (account = 'maria') => {
             const now = new Date();
 
             const totalScheduled = await TwitterPost.countDocuments({
+                account: account,
                 isSelected: true,
                 isPosted: false,
                 scheduledFor: { $exists: true }
@@ -541,6 +543,7 @@ const startSchedulerForAccount = async (account = 'maria') => {
 
 
             const tweetsToPost = await TwitterPost.find({
+                account: account,
                 isSelected: true,
                 isPosted: false,
                 scheduledFor: { $lte: now }
@@ -566,13 +569,13 @@ const startSchedulerForAccount = async (account = 'maria') => {
                     tweet.postedAt = new Date();
                     await tweet.save();
 
-                    console.log(`[SCHEDULER-${account.toUpperCase()}] ✅ Successfully posted tweet to ${tweet.postType || 'feed'}: ${tweet.text.substring(0, 50)}...`);
                 } else {
                     console.log(`[SCHEDULER-${account.toUpperCase()}] ❌ Failed to post tweet (postTweetToTwitter returned null)`);
                 }
             } else {
-                // Show next upcoming tweet if no tweets are due
+                // Show next upcoming tweet if no tweets are due FOR THIS ACCOUNT
                 const nextTweet = await TwitterPost.findOne({
+                    account: account,
                     isSelected: true,
                     isPosted: false,
                     scheduledFor: { $exists: true }
@@ -653,6 +656,7 @@ const getTwitterSchedulerStatus = async (req, res) => {
 
 
         const upcomingTweets = await TwitterPost.find({
+            account: account,
             isSelected: true,
             isPosted: false,
             scheduledFor: { $exists: true }
@@ -685,22 +689,25 @@ const getSchedulerDiagnostics = async (req, res) => {
         const { account = 'maria' } = req.query;
         const now = new Date();
 
-        // Get all scheduled tweets
+        // Get all scheduled tweets FOR THIS ACCOUNT
         const scheduledTweets = await TwitterPost.find({
+            account: account,
             isSelected: true,
             isPosted: false,
             scheduledFor: { $exists: true }
         }).sort('queuePosition');
 
-        // Get tweets that should have been posted by now
+        // Get tweets that should have been posted by now FOR THIS ACCOUNT
         const overdueTweets = await TwitterPost.find({
+            account: account,
             isSelected: true,
             isPosted: false,
             scheduledFor: { $lte: now }
         }).sort('queuePosition');
 
-        // Get upcoming tweets
+        // Get upcoming tweets FOR THIS ACCOUNT
         const upcomingTweets = await TwitterPost.find({
+            account: account,
             isSelected: true,
             isPosted: false,
             scheduledFor: { $gt: now }
