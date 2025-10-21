@@ -160,13 +160,13 @@ function getCustomCaption(platform, account, caption) {
 
     if (normalizedPlatform === 'instagram') {
         switch (normalizedAccount) {
-            case 'codingwithbugs':
-                return caption + " #codingwithbugs";
+            case 'coding_with_bugs':
+                return "👉 Follow @coding_with_bugs for your daily dose of tech humor #codingwithbugs #programmingmemes #developerhumor #coderslife #techmemes #funnydeveloper #softwareengineer #programmerlife";
 
             case 'vallendros':
             case 'vellandros':
                 return `2025 will be our year ❤️🔥💸
-Follow and manifest now !!
+Follow @vallendros and manifest now !!
 -
 -
 -
@@ -180,7 +180,55 @@ DM for credits or removal 🤝
                 return caption + " #dailyaiinsights #ai #artificialintelligence #tech #innovation";
 
             case 'dreamchasers':
-                return caption + " #dreamchasers";
+                return `2025 will be our year ❤️🔥💸
+Follow @vallendros and manifest now !!
+-
+-
+-
+DM for credits or removal 🤝
+-
+-
+-
+#motivation #inspiration #success #wealth #money #blessed #adrenaline #goal #achievement #vision #dream #`;
+
+            default:
+                return "";
+        }
+    }
+
+    if (normalizedPlatform === 'twitter') {
+        switch (normalizedAccount) {
+            case 'maria_in_tech':
+                // Tech career advice and coding tips
+                const mariaCaptions = [
+                    "Just shipped a feature that actually works on the first try. Is this what success feels like? 🚀\n\n#WebDev #CodingLife #TechTwitter",
+                    "Hot take: Reading documentation is not a weakness. It's literally what it's there for.\n\n#DevCommunity #LearnToCode #100DaysOfCode",
+                    "That feeling when your code passes all tests but you still don't trust it 👀\n\n#Programming #DevLife #SoftwareEngineering",
+                    "Pro tip: Console.log() is debugging. Don't let anyone tell you otherwise.\n\n#JavaScript #WebDevelopment #CodeNewbie",
+                    "Remember: Every senior dev was once a junior who refused to give up 💪\n\n#TechCareer #WomenInTech #DevCommunity",
+                    "Your imposter syndrome is lying to you. You belong here. ✨\n\n#TechTwitter #WomenWhoCode #DevMotivation",
+                    "Debugging: The art of being a detective in a crime you committed.\n\n#CodingHumor #DevLife #Programming",
+                    "Sometimes the best code is the code you delete 🗑️\n\n#CleanCode #SoftwareEngineering #DevTips",
+                    "If you're not breaking things, you're not learning fast enough.\n\n#LearnInPublic #CodeNewbie #TechTwitter",
+                    "The secret to being a good developer? Google, Stack Overflow, and pure determination.\n\n#100DaysOfCode #DevCommunity #WebDev"
+                ];
+                return mariaCaptions[Math.floor(Math.random() * mariaCaptions.length)];
+
+            case 'me_divya':
+                // Career growth, productivity, and tech industry insights
+                const divyaCaptions = [
+                    "Your career growth isn't linear. Stop comparing your chapter 3 to someone else's chapter 20.\n\n#CareerAdvice #TechCareer #WomenInTech",
+                    "Networking isn't about collecting contacts. It's about building genuine relationships.\n\n#CareerGrowth #TechCommunity #ProfessionalDevelopment",
+                    "That job you think you're not ready for? Apply anyway. Let them decide.\n\n#CareerTips #TechJobs #MotivationMonday",
+                    "Your side project doesn't need to be perfect. It needs to be started.\n\n#BuildInPublic #TechTwitter #SideHustle",
+                    "Boundaries aren't selfish. They're essential for sustainable success.\n\n#WorkLifeBalance #TechLife #MentalHealth",
+                    "You don't need to know everything. You need to know how to find answers.\n\n#ContinuousLearning #TechCareer #GrowthMindset",
+                    "The best investment you can make is in yourself. Keep learning, keep growing.\n\n#PersonalDevelopment #TechIndustry #LifelongLearning",
+                    "Saying 'I don't know, but I'll find out' is a strength, not a weakness.\n\n#TechLeadership #CareerAdvice #Authenticity",
+                    "Your productivity doesn't define your worth. Rest is productive too.\n\n#BurnoutPrevention #TechCommunity #SelfCare",
+                    "Dream big, start small, act now. That's how careers are built.\n\n#CareerGoals #TechMotivation #MondayMotivation"
+                ];
+                return divyaCaptions[Math.floor(Math.random() * divyaCaptions.length)];
 
             default:
                 return caption;
