@@ -8,7 +8,7 @@ const TwitterPost = require('../models/twitter.models')
 const readClients = {};
 const writeClients = {};
 
-function initializeTwitterClient(account = 'maria') {
+function initializeTwitterClient(account = 'maria_in_tech') {
     try {
         const credentials = getTwitterConfig(account);
 
@@ -30,8 +30,8 @@ function initializeTwitterClient(account = 'maria') {
 }
 
 // Initialize both accounts on module load
-initializeTwitterClient('maria');
-initializeTwitterClient('divya');
+initializeTwitterClient('maria_in_tech');
+initializeTwitterClient('me_divya');
 
 const uploadTwitterData = async (req, res) => {
     try {
@@ -247,7 +247,7 @@ function getSmartScheduleTimeFrom(baseTime) {
 
     } else {
         // Light posting: 4-5 hours interval
-        hours = Math.floor(Math.random() * 2) + 4; // 4-5 hours
+        hours = Math.floor(Math.random() * 2) + 5; // 4-5 hours
         minutes = Math.floor(Math.random() * 60); // 0-59 minutes
 
     }
@@ -476,9 +476,11 @@ const COMMUNITY_IDS = {
 };
 
 // Post a tweet to Twitter (feed or community)
-async function postTweetToTwitter(tweetText, postType = 'feed', account = 'maria') {
+async function postTweetToTwitter(tweetText, postType = 'feed', account = 'maria_in_tech') {
     try {
         const writeClient = writeClients[account];
+
+
 
         if (!writeClient) {
             console.error(`Twitter write client not initialized for account: ${account}`);
@@ -534,12 +536,6 @@ const startSchedulerForAccount = async (account = 'maria') => {
         try {
             const now = new Date();
 
-            const totalScheduled = await TwitterPost.countDocuments({
-                account: account,
-                isSelected: true,
-                isPosted: false,
-                scheduledFor: { $exists: true }
-            });
 
 
             const tweetsToPost = await TwitterPost.find({
@@ -548,6 +544,9 @@ const startSchedulerForAccount = async (account = 'maria') => {
                 isPosted: false,
                 scheduledFor: { $lte: now }
             }).sort('queuePosition').limit(1);
+
+            console.log("tweet to post is ===", tweetsToPost);
+
 
 
             if (tweetsToPost.length > 0) {

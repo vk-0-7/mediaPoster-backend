@@ -39,7 +39,7 @@ function getInstagramConfig(account) {
 
     switch (normalized) {
         case 'coding_with_bugs':
-            return {
+            return { 
                 PAGE_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID_FOR_CODINGWITHBUGS,
                 ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN_FOR_CODINGWITHBUGS,
             };
@@ -71,7 +71,7 @@ function getInstagramConfig(account) {
  * @returns {Object} Twitter credentials
  */
 function getTwitterConfig(account) {
-    const normalized = (account || 'maria').toLowerCase();
+    const normalized = (account || 'maria_in_tech').toLowerCase();
 
     switch (normalized) {
         case 'maria_in_tech':
