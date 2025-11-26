@@ -183,7 +183,7 @@ const createNewPost = async (req, res) => {
 
 const getTweets = async (req, res) => {
     try {
-        const { analyzed, selected, posted, account = 'maria' } = req.query;
+        const { analyzed, selected, posted, account = 'maria_in_tech' } = req.query;
 
 
 
@@ -234,7 +234,7 @@ function getSmartScheduleTimeFrom(baseTime) {
     // Heavy posting period: 1pm (13:00) - 8pm (20:00) IST - Post every 2-3 hours
     // Light posting period: 8pm (20:00) - 1pm (13:00) IST - Post every 4-5 hours
 
-    const isHeavyPeriod = istHour >= 13 && istHour < 23;
+    const isHeavyPeriod = istHour >= 15 && istHour < 23;
 
     let hours, minutes;
 
@@ -242,7 +242,7 @@ function getSmartScheduleTimeFrom(baseTime) {
 
     if (isHeavyPeriod) {
         // Heavy posting: 2-3 hours interval with random minutes
-        hours = Math.floor(Math.random() * 2) + 1; // 2-3 hours
+        hours = Math.floor(Math.random() * 2) + 2; // 2-3 hours
         minutes = Math.floor(Math.random() * 60); // 0-59 minutes
 
     } else {
@@ -277,7 +277,7 @@ function getSmartScheduleTime() {
 // Accept a tweet (schedule it for posting)
 const acceptTweet = async (req, res) => {
     try {
-        const { tweetId, postType, account = 'maria' } = req.body;
+        const { tweetId, postType, account = 'maria_in_tech' } = req.body;
 
         if (!tweetId) {
             return res.status(400).json({ error: 'tweetId is required' });
@@ -348,7 +348,7 @@ const acceptTweet = async (req, res) => {
 // Reject a tweet (delete it from database)
 const rejectTweet = async (req, res) => {
     try {
-        const { tweetId, account = 'maria' } = req.body;
+        const { tweetId, account = 'maria_in_tech' } = req.body;
 
         if (!tweetId) {
             return res.status(400).json({ error: 'tweetId is required' });
@@ -380,7 +380,7 @@ const rejectTweet = async (req, res) => {
 // Deselect tweets (with queue rebalancing)
 const deselectTweets = async (req, res) => {
     try {
-        const { tweetIds, account = 'maria' } = req.body;
+        const { tweetIds, account = 'maria_in_tech' } = req.body;
 
 
         // Find the tweets being canceled to get their queue positions
@@ -522,7 +522,7 @@ const schedulerRunning = {};
 const schedulerJobs = {};
 
 // Core scheduler logic (can be called without req/res)
-const startSchedulerForAccount = async (account = 'maria') => {
+const startSchedulerForAccount = async (account = 'maria_in_tech') => {
     if (schedulerRunning[account]) {
         console.log(`[INIT] Scheduler already running for ${account}`);
         return { success: true, message: `Scheduler already running for ${account}`, status: 'running' };
@@ -535,6 +535,8 @@ const startSchedulerForAccount = async (account = 'maria') => {
     schedulerJobs[account] = schedule.scheduleJob('*/1 * * * *', async () => {
         try {
             const now = new Date();
+
+            console.log("now is ===", now);
 
 
 
@@ -600,7 +602,7 @@ const startSchedulerForAccount = async (account = 'maria') => {
 // HTTP endpoint wrapper for starting scheduler
 const startTwitterScheduler = async (req, res) => {
     try {
-        const { account = 'maria' } = req.query;
+        const { account = 'maria_in_tech' } = req.query;
         const result = await startSchedulerForAccount(account);
         res.status(200).json(result);
     } catch (error) {
@@ -615,7 +617,7 @@ const startTwitterScheduler = async (req, res) => {
 // Stop the scheduler
 const stopTwitterScheduler = async (req, res) => {
     try {
-        const { account = 'maria' } = req.query;
+        const { account = 'maria_in_tech' } = req.query;
 
         if (!schedulerRunning[account]) {
             return res.status(200).json({
@@ -650,7 +652,7 @@ const stopTwitterScheduler = async (req, res) => {
 // Get scheduler status
 const getTwitterSchedulerStatus = async (req, res) => {
     try {
-        const { account = 'maria' } = req.query;
+        const { account = 'maria_in_tech' } = req.query;
 
 
 
@@ -685,7 +687,7 @@ const getTwitterSchedulerStatus = async (req, res) => {
 // Diagnostic endpoint to check scheduler state
 const getSchedulerDiagnostics = async (req, res) => {
     try {
-        const { account = 'maria' } = req.query;
+        const { account = 'maria_in_tech' } = req.query;
         const now = new Date();
 
         // Get all scheduled tweets FOR THIS ACCOUNT
@@ -796,7 +798,7 @@ const initializeTwitterSchedulers = async () => {
         console.log('🚀 Initializing Twitter Schedulers');
         console.log('=================================\n');
 
-        const accounts = ['maria', 'divya'];
+        const accounts = ['maria_in_tech', 'me_divya'];
 
         for (const account of accounts) {
             try {
